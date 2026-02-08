@@ -9,9 +9,15 @@ struct Counter : Simulatable {
     void step(double dt) override { setValue(value() + dt); }
 };
 
+// Example simulatable: count at double the rate of the first counter
+struct CounterTwoDt : Simulatable {
+    void step(double dt) override { setValue(value() + (2.0 * dt)); }
+};
+
 int main() {
     Simulation sim(0.1);
-    Counter c1, c2;
+    Counter c1;
+    CounterTwoDt c2;
     std::unordered_map<std::string, Simulatable*> objects = {{"c1", &c1}, {"c2", &c2}};
     sim.add(&c1);
     sim.add(&c2);

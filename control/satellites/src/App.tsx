@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Globe, type SatellitePositionData } from './Globe'
+import { MapView } from './MapView'
 
 const STATUS_URL = 'http://localhost:8848/status/all'
 
@@ -59,6 +60,8 @@ function App() {
       <h1>Satellites</h1>
 
       <Globe satellitePositionData={satellitePositionData} />
+
+      <MapView satellitePositionData={satellitePositionData} />
 
       <form onSubmit={handleSubmit} className="status-form">
         <button type="submit" disabled={loading}>

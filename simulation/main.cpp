@@ -5,10 +5,12 @@
 #include <thread>
 #include <unordered_map>
 
+// Frontend expects latitude/longitude in scale units (degrees × 1e7).
+constexpr double DEG_SCALE = 1e7;
 int main() {
     Simulation sim(0.000001);
-    Satellite s1(0.0, 0.0, 4000000.0);
-    Satellite s2(1000.0, 1000.0, 4000000.0);
+    Satellite s1(0.0, 0.0, 4000000.0);                                    // 0°, 0°
+    Satellite s2(30.0 * DEG_SCALE, 60.0 * DEG_SCALE, 4000000.0);          // 30°N, 60°E
     std::unordered_map<std::string, Simulatable*> objects = {{"sat1", &s1}, {"sat2", &s2}};
     sim.add(&s1);
     sim.add(&s2);

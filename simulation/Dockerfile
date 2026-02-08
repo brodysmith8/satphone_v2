@@ -2,7 +2,7 @@
 FROM gcc:12-bookworm AS builder
 WORKDIR /build
 
-COPY Makefile main.cpp ./
+COPY * ./
 RUN make
 
 # Runtime stage (minimal image for running)

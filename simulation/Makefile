@@ -1,7 +1,7 @@
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -O2
 TARGET   := sim
-SRCS     := main.cpp
+SRCS     := main.cpp Simulation.cpp
 OBJS     := $(SRCS:.cpp=.o)
 
 .PHONY: all clean run

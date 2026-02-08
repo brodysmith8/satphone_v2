@@ -12,7 +12,13 @@ void Simulation::step(double dt) {
     }
 }
 
-void Simulation::run(double duration) {
+void Simulation::run() {
+    while (true) {
+        step(dt_);
+    }
+}
+
+void Simulation::run_for_duration(double duration) {
     const int steps = static_cast<int>(duration / dt_);
     for (int i = 0; i < steps; ++i) {
         step(dt_);

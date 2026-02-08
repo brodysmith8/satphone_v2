@@ -18,10 +18,15 @@ public:
     void add(Simulatable* obj);
     
     /**
+     * Run the simulation infinitely, advancing by dt_ each step.
+     */
+    void run();
+
+    /**
     * Run the simulation for a given duration, advancing by dt_ each step.
     * @param duration Total simulated time to run.
     */
-    void run(double duration);
+    void run_for_duration(double duration);
     
     /** Number of simulatable objects currently registered. */
     size_t size() const;

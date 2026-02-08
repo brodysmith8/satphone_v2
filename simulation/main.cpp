@@ -21,16 +21,17 @@ int main() {
     std::unordered_map<std::string, Simulatable*> objects = {{"c1", &c1}, {"c2", &c2}};
     sim.add(&c1);
     sim.add(&c2);
-    // Simulation thread: runs the simulation
     std::thread sim_thread([&]() {
-        sim.run(2.0); // 20 steps of 0.1s
+        // Simulation thread: runs the simulation
+        // sim.run_for_duration(2.0); // 20 steps of 0.1s
+        sim.run(); // Run infinitely
         std::cout << "Satphone simulation ran " << sim.size() << " objects to t=2.0.\n";
         std::cout << "Counters at " << c1.value() << ", " << c2.value() << "\n";
     });
 
     App app;
-    // Server thread: runs the Drogon API server (blocking on this thread)
     std::thread server_thread([&app, objects]() {
+        // Server thread: runs the Drogon API server (blocking on this thread)
         app.add_objects(objects);
         app.run();
     });

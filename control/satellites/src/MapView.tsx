@@ -192,7 +192,12 @@ export function MapView({ satellitePositionData }: MapViewProps) {
         {points.map(({ id, x, y, height: h }) => {
           const heightKm = h / 1000
           const lineHeight = 11
-          const labelY = y + 20
+          // Round coordinates for label position and display to avoid jitter as satellites move.
+          // Raw x/y change every frame; rounding to 1 decimal stabilizes the label and prevents
+          // digit flips (e.g. 199.96 vs 200.04) that shift text layout.
+          const xR = Math.round(x * 10) / 10
+          const yR = Math.round(y * 10) / 10
+          const labelY = yR + 20
           return (
             <g key={id}>
               <circle cx={x} cy={y} r={6} fill="#f0c040" stroke="#2a2a3e" strokeWidth={1.5} />
@@ -209,7 +214,7 @@ export function MapView({ satellitePositionData }: MapViewProps) {
                 {id}
               </text>
               <text
-                x={x}
+                x={xR}
                 y={labelY}
                 textAnchor="middle"
                 fill="rgba(255,255,255,0.6)"
@@ -219,9 +224,9 @@ export function MapView({ satellitePositionData }: MapViewProps) {
                 strokeWidth={2}
                 paintOrder="stroke fill"
               >
-                <tspan x={x} dy={0}>x: {x.toFixed(1)}</tspan>
-                <tspan x={x} dy={lineHeight}>y: {y.toFixed(1)}</tspan>
-                <tspan x={x} dy={lineHeight}>z: {heightKm.toFixed(2)} km</tspan>
+                <tspan x={xR} dy={0}>x: {xR.toFixed(1)}</tspan>
+                <tspan x={xR} dy={lineHeight}>y: {yR.toFixed(1)}</tspan>
+                <tspan x={xR} dy={lineHeight}>z: {heightKm.toFixed(2)} km</tspan>
               </text>
             </g>
           )

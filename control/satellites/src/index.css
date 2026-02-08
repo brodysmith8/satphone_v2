@@ -17,8 +17,8 @@ body {
   position: relative;
   width: 100%;
   max-width: min(1200px, 95vw);
-  aspect-ratio: 1;
-  min-height: min(60vh, 60vw);
+  aspect-ratio: 4/3;
+  min-height: min(45vh, 45vw);
   margin: 1.5rem auto;
   border-radius: 8px;
   overflow: hidden;

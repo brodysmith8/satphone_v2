@@ -8,7 +8,7 @@
 // Satellite constructor takes initial subsatellite point in RADIANS; API returns lat/lon in radians, height in m.
 constexpr double DEG_TO_RAD = 3.141592653589793 / 180.0;
 int main() {
-    Simulation sim(0.000001);
+    Simulation sim(1e-5);
     Satellite s1(0.0, 0.0, 400000.0);                                      // 0°, 0°, 400 km
     Satellite s2(30.0 * DEG_TO_RAD, 60.0 * DEG_TO_RAD, 400000.0);          // 30°N, 60°E, 400 km
     std::unordered_map<std::string, Simulatable*> objects = {{"sat1", &s1}, {"sat2", &s2}};

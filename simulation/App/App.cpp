@@ -17,6 +17,7 @@ void App::run() {
                 body[id] = obj->value();
             }
             auto resp = HttpResponse::newHttpJsonResponse(body);
+            resp->addHeader("Access-Control-Allow-Origin", "*");
             callback(resp);
         },
         {Get});
@@ -30,6 +31,7 @@ void App::run() {
             Json::Value body;
             body["value"] = id;
             auto resp = HttpResponse::newHttpJsonResponse(body);
+            resp->addHeader("Access-Control-Allow-Origin", "*");
             callback(resp);
         },
         {Get});

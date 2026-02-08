@@ -9,6 +9,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import earthTextureUrl from './assets/earth_atmos_2048.jpg'
+
 const LAT_LON_SCALE = 1e7
 const ANGULAR_EXAGGERATION = 1e6
 const MAP_WIDTH = 800
@@ -33,18 +35,15 @@ export type MapViewProps = {
   satellitePositionData: MapViewPositionData | null
 }
 
-/** Center of satellite cluster in degrees (same as Globe). */
+/** Center of satellite cluster in degrees. Sorted by id to match Globe's reference frame. */
 function computeCenter(entries: [string, MapViewPosition][]): { latDeg: number; lonDeg: number } {
   if (entries.length === 0) return { latDeg: 0, lonDeg: 0 }
-  let sumLat = 0
-  let sumLon = 0
-  for (const [, pos] of entries) {
-    sumLat += pos.latitude / LAT_LON_SCALE
-    sumLon += pos.longitude / LAT_LON_SCALE
-  }
+  const sorted = [...entries].sort(([a], [b]) => a.localeCompare(b))
   return {
-    latDeg: sumLat / entries.length,
-    lonDeg: sumLon / entries.length,
+    latDeg:
+      sorted.reduce((s, [, pos]) => s + pos.latitude / LAT_LON_SCALE, 0) / sorted.length,
+    lonDeg:
+      sorted.reduce((s, [, pos]) => s + pos.longitude / LAT_LON_SCALE, 0) / sorted.length,
   }
 }
 
@@ -210,15 +209,23 @@ export function MapView({ satellitePositionData }: MapViewProps) {
       >
         <defs>
           <pattern id="grid" width={40} height={40} patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" />
           </pattern>
         </defs>
-        <rect width={width} height={height} fill="#1a1a2e" />
+        {/* Equirectangular Earth: (0,0)-(width,height) = lon [-180,180], lat [90,-90] */}
+        <image
+          href={earthTextureUrl}
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          preserveAspectRatio="none"
+        />
         <rect width={width} height={height} fill="url(#grid)" />
         {/* Equator */}
-        <line x1={0} y1={height / 2} x2={width} y2={height / 2} stroke="rgba(255,255,255,0.12)" strokeWidth="0.5" />
+        <line x1={0} y1={height / 2} x2={width} y2={height / 2} stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
         {/* Prime meridian */}
-        <line x1={width / 2} y1={0} x2={width / 2} y2={height} stroke="rgba(255,255,255,0.12)" strokeWidth="0.5" />
+        <line x1={width / 2} y1={0} x2={width / 2} y2={height} stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
         {points.map(({ id, x, y, height: h }) => (
           <g key={id}>
             <circle cx={x} cy={y} r={6} fill="#f0c040" stroke="#2a2a3e" strokeWidth={1.5} />

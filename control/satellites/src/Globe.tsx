@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { OrbitControls, useTexture } from '@react-three/drei'
+
+import earthTextureUrl from './assets/earth_atmos_2048.jpg'
 
 const EARTH_RADIUS_KM = 6371
 const LAT_LON_SCALE = 1e7
@@ -83,6 +85,20 @@ function SatelliteNode({
   )
 }
 
+function EarthSphere() {
+  const map = useTexture(earthTextureUrl)
+  return (
+    <mesh castShadow receiveShadow>
+      <sphereGeometry args={[1, 64, 64]} />
+      <meshStandardMaterial
+        map={map}
+        roughness={0.7}
+        metalness={0.1}
+      />
+    </mesh>
+  )
+}
+
 function SphereScene({
   positions,
   viewCenter,
@@ -100,14 +116,7 @@ function SphereScene({
         shadow-mapSize={[2048, 2048]}
       />
       <ambientLight intensity={0.4} />
-      <mesh castShadow receiveShadow>
-        <sphereGeometry args={[1, 64, 64]} />
-        <meshStandardMaterial
-          color="#3a7ca5"
-          roughness={0.7}
-          metalness={0.1}
-        />
-      </mesh>
+      <EarthSphere />
       {entries.map(([id, state]) => (
         <SatelliteNode key={id} {...state} center={viewCenter} />
       ))}

@@ -6,7 +6,7 @@
 #include <unordered_map>
 
 int main() {
-    Simulation sim(0.1);
+    Simulation sim(1);
     Satellite s1;
     Satellite s2(10.0, 10.0, 10.0);
     std::unordered_map<std::string, Simulatable*> objects = {{"sat1", &s1}, {"sat2", &s2}};

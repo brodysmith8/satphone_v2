@@ -1,68 +1,45 @@
-import { useState, useEffect } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, useTexture } from '@react-three/drei'
 
 import earthTextureUrl from './assets/earth_atmos_2048.jpg'
+import {
+  type SatellitePosition,
+  type SatellitePositionData,
+  positionToDegrees,
+} from './satellitePosition'
 
 const EARTH_RADIUS_KM = 6371
-const LAT_LON_SCALE = 1e7
-const HEIGHT_SCALE = 1000
-const ANGULAR_EXAGGERATION = 1e6
 
-/** Satellite position as returned by the API (lat/lon in scale units, height in meters). */
-export type SatellitePosition = {
-  latitude: number
-  longitude: number
-  height: number
-}
-
-/** Map of satellite id -> position (JSON from API). */
-export type SatellitePositionData = Record<string, SatellitePosition>
-
+/**
+ * Convert (lat, lon) in degrees + height in meters to Cartesian (x,y,z) for a unit-radius
+ * sphere, using the same convention as Three.js SphereGeometry UVs so satellites align
+ * with the equirectangular Earth texture. phi = lon (from +x), theta = colatitude from +y.
+ */
 function sphericalToCartesian(
-  height: number,
-  lat: number,
-  lon: number,
-  ref: { latDeg: number; lonDeg: number }
+  latDeg: number,
+  lonDeg: number,
+  heightM: number
 ): [number, number, number] {
-  const latDeg = lat / LAT_LON_SCALE
-  const lonDeg = lon / LAT_LON_SCALE
-  const latDisplay = ref.latDeg + (latDeg - ref.latDeg) * ANGULAR_EXAGGERATION
-  const lonDisplay = ref.lonDeg + (lonDeg - ref.lonDeg) * ANGULAR_EXAGGERATION
-  const heightKm = height / HEIGHT_SCALE
+  const heightKm = heightM / 1000
   const r = 1 + heightKm / EARTH_RADIUS_KM
-  const phi = (latDisplay * Math.PI) / 180
-  const theta = (lonDisplay * Math.PI) / 180
-  const x = r * Math.cos(phi) * Math.cos(theta)
-  const y = r * Math.sin(phi)
-  const z = r * Math.cos(phi) * Math.sin(theta)
+  const phi = (lonDeg * Math.PI) / 180
+  const theta = ((90 - latDeg) * Math.PI) / 180
+  const x = -r * Math.cos(phi) * Math.sin(theta)
+  const y = r * Math.cos(theta)
+  const z = r * Math.sin(phi) * Math.sin(theta)
   return [x, y, z]
 }
 
-function computeCenter(entries: [string, SatellitePosition][]): {
-  latDeg: number
-  lonDeg: number
-} {
-  if (entries.length === 0) return { latDeg: 0, lonDeg: 0 }
-  const sorted = [...entries].sort(([a], [b]) => a.localeCompare(b))
-  return {
-    latDeg:
-      sorted.reduce((s, [, st]) => s + st.latitude / LAT_LON_SCALE, 0) /
-      sorted.length,
-    lonDeg:
-      sorted.reduce((s, [, st]) => s + st.longitude / LAT_LON_SCALE, 0) /
-      sorted.length,
-  }
-}
+export type { SatellitePosition, SatellitePositionData }
 
-function SatelliteNode({
-  height,
-  latitude,
-  longitude,
-  center,
-}: SatellitePosition & { center: { latDeg: number; lonDeg: number } }) {
-  const [x, y, z] = sphericalToCartesian(height, latitude, longitude, center)
-  const r = 1 + height / HEIGHT_SCALE / EARTH_RADIUS_KM
+function SatelliteNode({ height, latitude, longitude }: SatellitePosition) {
+  const { latDeg, lonDeg, heightKm } = positionToDegrees({
+    latitude,
+    longitude,
+    height,
+  })
+  const [x, y, z] = sphericalToCartesian(latDeg, lonDeg, height)
+  const r = 1 + heightKm / EARTH_RADIUS_KM
   const scale = Math.max(0.012, Math.min(0.04, (r - 1) * 3 + 0.015))
   return (
     <group position={[x, y, z]}>
@@ -101,10 +78,8 @@ function EarthSphere() {
 
 function SphereScene({
   positions,
-  viewCenter,
 }: {
   positions: SatellitePositionData | null
-  viewCenter: { latDeg: number; lonDeg: number }
 }) {
   const entries = positions ? Object.entries(positions) : []
   return (
@@ -118,7 +93,12 @@ function SphereScene({
       <ambientLight intensity={0.4} />
       <EarthSphere />
       {entries.map(([id, state]) => (
-        <SatelliteNode key={id} {...state} center={viewCenter} />
+        <SatelliteNode
+          key={id}
+          latitude={state.latitude}
+          longitude={state.longitude}
+          height={state.height}
+        />
       ))}
       <OrbitControls
         enablePan={false}
@@ -131,31 +111,11 @@ function SphereScene({
 }
 
 export type GlobeProps = {
-  /** Satellite position data (JSON from API): id -> { latitude, longitude, height }. */
+  /** Satellite position data (JSON from API): lat/lon in radians, height in meters. */
   satellitePositionData: SatellitePositionData | null
 }
 
 export function Globe({ satellitePositionData }: GlobeProps) {
-  const [viewCenter, setViewCenter] = useState<{
-    latDeg: number
-    lonDeg: number
-  }>({ latDeg: 0, lonDeg: 0 })
-  const [satelliteIds, setSatelliteIds] = useState<string[]>([])
-
-  useEffect(() => {
-    if (!satellitePositionData) return
-    const entries = Object.entries(satellitePositionData)
-    const ids = entries.map(([id]) => id).sort()
-    const idsKey = ids.join(',')
-    const prevIdsKey = satelliteIds.join(',')
-    if (idsKey !== prevIdsKey) {
-      setViewCenter(computeCenter(entries as [string, SatellitePosition][]))
-      setSatelliteIds(ids)
-    }
-  }, [satellitePositionData, satelliteIds])
-
-  const center = viewCenter
-
   return (
     <div className="sphere-container">
       <Canvas
@@ -163,10 +123,7 @@ export function Globe({ satellitePositionData }: GlobeProps) {
         gl={{ antialias: true }}
         shadows
       >
-        <SphereScene
-          positions={satellitePositionData}
-          viewCenter={center}
-        />
+        <SphereScene positions={satellitePositionData} />
       </Canvas>
       <p className="sphere-hint">Drag to rotate · Scroll to zoom</p>
     </div>

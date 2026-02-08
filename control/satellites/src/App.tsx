@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Globe, type SatellitePositionData } from './Globe'
+import { Globe } from './Globe'
 import { MapView } from './MapView'
+import { type SatellitePositionData } from './satellitePosition'
 
 const STATUS_URL = 'http://localhost:8848/status/all'
 

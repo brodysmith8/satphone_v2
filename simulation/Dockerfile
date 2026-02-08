@@ -2,7 +2,7 @@
 FROM drogonframework/drogon:latest AS builder
 WORKDIR /build
 
-COPY CMakeLists.txt main.cpp App.cpp App.hpp Simulation.cpp Simulation.hpp Simulatable.hpp ./
+COPY * ./
 RUN mkdir -p build && cd build && \
     cmake .. && cmake --build .
 

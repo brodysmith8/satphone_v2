@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import earthTextureUrl from './assets/earth_atmos_2048.jpg'
+import earthTextureUrl from './assets/earth_5400x2700.png'
 import {
   type SatellitePosition,
   type SatellitePositionData,
@@ -189,17 +189,43 @@ export function MapView({ satellitePositionData }: MapViewProps) {
         <line x1={0} y1={height / 2} x2={width} y2={height / 2} stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
         {/* Prime meridian */}
         <line x1={width / 2} y1={0} x2={width / 2} y2={height} stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
-        {points.map(({ id, x, y, height: h }) => (
-          <g key={id}>
-            <circle cx={x} cy={y} r={6} fill="#f0c040" stroke="#2a2a3e" strokeWidth={1.5} />
-            <text x={x} y={y - 12} textAnchor="middle" fill="rgba(255,255,255,0.9)" fontSize={10}>
-              {id}
-            </text>
-            <text x={x} y={y + 22} textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize={9}>
-              {Math.round(h)} m
-            </text>
-          </g>
-        ))}
+        {points.map(({ id, x, y, height: h }) => {
+          const heightKm = h / 1000
+          const lineHeight = 11
+          const labelY = y + 20
+          return (
+            <g key={id}>
+              <circle cx={x} cy={y} r={6} fill="#f0c040" stroke="#2a2a3e" strokeWidth={1.5} />
+              <text
+                x={x}
+                y={y - 12}
+                textAnchor="middle"
+                fill="rgba(255,255,255,0.9)"
+                fontSize={10}
+                stroke="rgba(0,0,0,0.5)"
+                strokeWidth={2.5}
+                paintOrder="stroke fill"
+              >
+                {id}
+              </text>
+              <text
+                x={x}
+                y={labelY}
+                textAnchor="middle"
+                fill="rgba(255,255,255,0.6)"
+                fontSize={9}
+                fontFamily="'Courier New', Courier, monospace"
+                stroke="rgba(0,0,0,0.5)"
+                strokeWidth={2}
+                paintOrder="stroke fill"
+              >
+                <tspan x={x} dy={0}>x: {x.toFixed(1)}</tspan>
+                <tspan x={x} dy={lineHeight}>y: {y.toFixed(1)}</tspan>
+                <tspan x={x} dy={lineHeight}>z: {heightKm.toFixed(2)} km</tspan>
+              </text>
+            </g>
+          )
+        })}
       </svg>
       <p className="map-view-hint">Equirectangular map · True lat/lon from simulator · Scroll to zoom · Drag to pan</p>
     </div>

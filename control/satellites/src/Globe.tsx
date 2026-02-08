@@ -1,7 +1,7 @@
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, useTexture } from '@react-three/drei'
 
-import earthTextureUrl from './assets/earth_atmos_2048.jpg'
+import earthTextureUrl from './assets/earth_5400x2700.png'
 import {
   type SatellitePosition,
   type SatellitePositionData,
@@ -87,11 +87,11 @@ function SphereScene({
     <>
       <directionalLight
         position={[10, 10, 10]}
-        intensity={1.2}
+        intensity={1.8}
         castShadow
         shadow-mapSize={[2048, 2048]}
       />
-      <ambientLight intensity={0.4} />
+      <ambientLight intensity={0.65} />
       <EarthSphere />
       {entries.map(([id, state]) => (
         <SatelliteNode

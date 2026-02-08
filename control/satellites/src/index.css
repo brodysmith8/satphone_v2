@@ -9,14 +9,14 @@ body {
 
 .app {
   padding: 2rem;
-  max-width: min(96ch, 95vw);
+  max-width: min(140ch, 98vw);
   margin: 0 auto;
 }
 
 .sphere-container {
   position: relative;
   width: 100%;
-  max-width: min(800px, 85vw);
+  max-width: min(1200px, 95vw);
   aspect-ratio: 1;
   min-height: min(60vh, 60vw);
   margin: 1.5rem auto;
@@ -46,7 +46,7 @@ body {
 .map-view-container {
   position: relative;
   width: 100%;
-  max-width: min(800px, 85vw);
+  max-width: min(1200px, 95vw);
   aspect-ratio: 2;
   min-height: min(40vh, 40vw);
   margin: 1.5rem auto;

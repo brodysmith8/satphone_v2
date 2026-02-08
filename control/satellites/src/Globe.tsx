@@ -12,8 +12,9 @@ const EARTH_RADIUS_KM = 6371
 
 /**
  * Convert (lat, lon) in degrees + height in meters to Cartesian (x,y,z) for a unit-radius
- * sphere, using the same convention as Three.js SphereGeometry UVs so satellites align
- * with the equirectangular Earth texture. phi = lon (from +x), theta = colatitude from +y.
+ * sphere. Aligned with equirectangular Earth texture and MapView: texture center (u=0.5)
+ * is prime meridian (lon 0°), so we use phi = (lon + 180)° so lon 0° maps to phi = π.
+ * theta = colatitude from +y.
  */
 function sphericalToCartesian(
   latDeg: number,
@@ -22,7 +23,7 @@ function sphericalToCartesian(
 ): [number, number, number] {
   const heightKm = heightM / 1000
   const r = 1 + heightKm / EARTH_RADIUS_KM
-  const phi = (lonDeg * Math.PI) / 180
+  const phi = ((lonDeg + 180) * Math.PI) / 180
   const theta = ((90 - latDeg) * Math.PI) / 180
   const x = -r * Math.cos(phi) * Math.sin(theta)
   const y = r * Math.cos(theta)

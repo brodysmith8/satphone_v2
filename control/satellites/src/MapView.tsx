@@ -31,8 +31,9 @@ export type MapViewProps = {
 }
 
 /**
- * Equirectangular projection: lon [-180, 180] -> x [0, width], lat [90, -90] -> y [0, height].
- * Matches the Earth texture and Globe's spherical coordinates.
+ * Equirectangular projection aligned with the shared Earth texture and simulation lat/lon:
+ * - Texture center (width/2, height/2) = prime meridian (0° lon), equator (0° lat).
+ * - lon [-180, 180] -> x [0, width]; lat [90, -90] -> y [0, height].
  */
 function lonLatToXY(
   lonDeg: number,

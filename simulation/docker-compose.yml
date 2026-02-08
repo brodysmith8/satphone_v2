@@ -2,3 +2,7 @@ services:
   sim:
     build: .
     image: satphone-sim:latest
+    ports:
+      - "8848:8848"
+    environment:
+      - PORT=8848

@@ -1,3 +1,4 @@
+#include "App.hpp"
 #include "Simulation.hpp"
 #include <iostream>
 
@@ -17,5 +18,10 @@ int main() {
 
     std::cout << "Satphone simulation ran " << sim.size() << " objects to t=1.0.\n";
     std::cout << "Counters at " << c1.value << ", " << c2.value << "\n";
+
+    // Run the Drogon API server
+    App app;
+    app.run();
+
     return 0;
 }

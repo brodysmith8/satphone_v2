@@ -1,18 +1,17 @@
-# Build stage
-FROM gcc:12-bookworm AS builder
+# Build stage: official Drogon image has framework and deps installed
+FROM drogonframework/drogon:latest AS builder
 WORKDIR /build
 
-COPY * ./
-RUN make
+COPY CMakeLists.txt main.cpp App.cpp App.hpp Simulation.cpp Simulation.hpp Simulatable.hpp ./
+RUN mkdir -p build && cd build && \
+    cmake .. && cmake --build .
 
-# Runtime stage (minimal image for running)
-FROM debian:bookworm-slim
+# Run stage: same image so shared libs (drogon, trantor) are available
+FROM drogonframework/drogon:latest
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libstdc++6 \
-    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /build/build/sim /app/sim
 
-COPY --from=builder /build/sim /app/sim
-
+EXPOSE 8848
+ENV PORT=8848
 ENTRYPOINT ["/app/sim"]

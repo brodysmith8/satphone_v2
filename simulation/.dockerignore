@@ -1,0 +1,6 @@
+*.o
+sim
+.git
+.gitignore
+*.md
+.DS_Store

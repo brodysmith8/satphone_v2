@@ -150,7 +150,7 @@ export function Globe({ satellitePositionData }: GlobeProps) {
   return (
     <div className="sphere-container">
       <Canvas
-        camera={{ position: [0, 0, 3], fov: 50 }}
+        camera={{ position: [0, 0, 4.5], fov: 50 }}
         gl={{ antialias: true }}
         shadows
       >

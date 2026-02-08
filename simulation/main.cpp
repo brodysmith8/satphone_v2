@@ -1,6 +1,7 @@
 #include "App.hpp"
 #include "Simulation.hpp"
 #include <iostream>
+#include <thread>
 
 // Example simulatable: a simple counter
 struct Counter : Simulatable {
@@ -14,14 +15,27 @@ int main() {
     sim.add(&c1);
     sim.add(&c2);
 
-    sim.run(2.0); // 20 steps of 0.1s
-
-    std::cout << "Satphone simulation ran " << sim.size() << " objects to t=1.0.\n";
-    std::cout << "Counters at " << c1.value << ", " << c2.value << "\n";
-
-    // Run the Drogon API server
     App app;
-    app.run();
 
+    // Server thread: runs the Drogon API server (blocking on this thread)
+    std::thread server_thread([&app]() {
+        app.run();
+    });
+
+    // Simulation thread: runs the simulation
+    std::thread sim_thread([&]() {
+        sim.run(2.0); // 20 steps of 0.1s
+        std::cout << "Satphone simulation ran " << sim.size() << " objects to t=2.0.\n";
+        std::cout << "Counters at " << c1.value << ", " << c2.value << "\n";
+    });
+
+    // Main thread waits for the server (runs until server exits)
+    server_thread.join();
+    server_thread.detach();
+    if (sim_thread.joinable()) {
+        sim_thread.join();
+        sim_thread.detach();
+    }
+    
     return 0;
 }

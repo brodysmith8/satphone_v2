@@ -9,15 +9,16 @@ body {
 
 .app {
   padding: 2rem;
-  max-width: 60ch;
+  max-width: min(96ch, 95vw);
   margin: 0 auto;
 }
 
 .sphere-container {
   position: relative;
   width: 100%;
-  max-width: 480px;
+  max-width: min(800px, 85vw);
   aspect-ratio: 1;
+  min-height: min(60vh, 60vw);
   margin: 1.5rem auto;
   border-radius: 8px;
   overflow: hidden;

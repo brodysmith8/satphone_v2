@@ -6,8 +6,8 @@ Satellite::Satellite(double latitude, double longitude, double height)
     : latitude_(latitude), longitude_(longitude), height_(height) {}
 
 void Satellite::step(double dt) {
-    latitude_ += 3.0 * dt;
-    longitude_ += 2.0 * dt;
+    latitude_ += dt;
+    longitude_ += dt;
     height_ += dt;
 }
 

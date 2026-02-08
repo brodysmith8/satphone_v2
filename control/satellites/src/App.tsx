@@ -5,7 +5,8 @@ const STATUS_URL = 'http://localhost:8848/status/all'
 
 const EARTH_RADIUS_KM = 6371
 const LAT_LON_SCALE = 1e7
-const HEIGHT_SCALE = 1e6
+/** API height is in meters; divide by this to get km for radius. */
+const HEIGHT_SCALE = 1000
 const ANGULAR_EXAGGERATION = 1e6
 
 type SatelliteState = {
@@ -66,19 +67,30 @@ function SatelliteNode({
   )
 }
 
-function SphereScene({ satellites }: { satellites: StatusResponse | null }) {
+function computeCenter(entries: [string, SatelliteState][]): {
+  latDeg: number
+  lonDeg: number
+} {
+  if (entries.length === 0) return { latDeg: 0, lonDeg: 0 }
+  const sorted = [...entries].sort(([a], [b]) => a.localeCompare(b))
+  return {
+    latDeg:
+      sorted.reduce((s, [, st]) => s + st.latitude / LAT_LON_SCALE, 0) /
+      sorted.length,
+    lonDeg:
+      sorted.reduce((s, [, st]) => s + st.longitude / LAT_LON_SCALE, 0) /
+      sorted.length,
+  }
+}
+
+function SphereScene({
+  satellites,
+  viewCenter,
+}: {
+  satellites: StatusResponse | null
+  viewCenter: { latDeg: number; lonDeg: number }
+}) {
   const entries = satellites ? Object.entries(satellites) : []
-  const ref =
-    entries.length > 0
-      ? {
-          latDeg:
-            entries.reduce((s, [, st]) => s + st.latitude / LAT_LON_SCALE, 0) /
-            entries.length,
-          lonDeg:
-            entries.reduce((s, [, st]) => s + st.longitude / LAT_LON_SCALE, 0) /
-            entries.length,
-        }
-      : { latDeg: 0, lonDeg: 0 }
   return (
     <>
       <directionalLight
@@ -97,7 +109,7 @@ function SphereScene({ satellites }: { satellites: StatusResponse | null }) {
         />
       </mesh>
       {entries.map(([id, state]) => (
-        <SatelliteNode key={id} {...state} center={ref} />
+        <SatelliteNode key={id} {...state} center={viewCenter} />
       ))}
       <OrbitControls
         enablePan={false}
@@ -112,6 +124,11 @@ function SphereScene({ satellites }: { satellites: StatusResponse | null }) {
 function App() {
   const [response, setResponse] = useState<string | null>(null)
   const [satellites, setSatellites] = useState<StatusResponse | null>(null)
+  const [viewCenter, setViewCenter] = useState<{
+    latDeg: number
+    lonDeg: number
+  } | null>(null)
+  const [satelliteIds, setSatelliteIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -137,6 +154,20 @@ function App() {
     }
   }
 
+  // Stabilize view center: only update when the set of satellite IDs changes,
+  // so position updates don't move the reference and cause all spheres to jump.
+  useEffect(() => {
+    if (!satellites) return
+    const entries = Object.entries(satellites)
+    const ids = entries.map(([id]) => id).sort()
+    const idsKey = ids.join(',')
+    const prevIdsKey = satelliteIds.join(',')
+    if (viewCenter === null || idsKey !== prevIdsKey) {
+      setViewCenter(computeCenter(entries as [string, SatelliteState][]))
+      setSatelliteIds(ids)
+    }
+  }, [satellites, satelliteIds, viewCenter])
+
   useEffect(() => {
     const poll = async () => {
       try {
@@ -150,7 +181,7 @@ function App() {
       }
     }
     poll()
-    const id = setInterval(poll, 100)
+    const id = setInterval(poll, 10) // 10 = 10ms poll interval
     return () => clearInterval(id)
   }, [])
 
@@ -169,7 +200,10 @@ function App() {
           gl={{ antialias: true }}
           shadows
         >
-          <SphereScene satellites={satellites} />
+          <SphereScene
+            satellites={satellites}
+            viewCenter={viewCenter ?? { latDeg: 0, lonDeg: 0 }}
+          />
         </Canvas>
         <p className="sphere-hint">Drag to rotate · Scroll to zoom</p>
       </div>

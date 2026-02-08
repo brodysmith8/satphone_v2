@@ -66,6 +66,11 @@ function lonLatToXY(
   return { x, y }
 }
 
+/** Wrap a value into [0, bound) so positions that exceed canvas bounds wrap to the opposite side. */
+function wrapToCanvas(value: number, bound: number): number {
+  return ((value % bound) + bound) % bound
+}
+
 function clampZoom(zoom: number) {
   return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom))
 }
@@ -110,7 +115,13 @@ export function MapView({ satellitePositionData }: MapViewProps) {
   const points = entries.map(([id, pos]) => {
     const latDeg = pos.latitude / LAT_LON_SCALE
     const lonDeg = pos.longitude / LAT_LON_SCALE
-    return { id, ...lonLatToXY(lonDeg, latDeg, center, width, height), height: pos.height }
+    const { x, y } = lonLatToXY(lonDeg, latDeg, center, width, height)
+    return {
+      id,
+      x: wrapToCanvas(x, width),
+      y: wrapToCanvas(y, height),
+      height: pos.height,
+    }
   })
 
   const visibleWidth = width / zoom

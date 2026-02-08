@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Globe } from './Globe'
 import { MapView } from './MapView'
+import { SatelliteCoordinatesBox } from './SatelliteCoordinatesBox'
 import { type SatellitePositionData } from './satellitePosition'
 
 const STATUS_URL = 'http://localhost:8848/status/all'
 
 function App() {
-  const [response, setResponse] = useState<string | null>(null)
   const [satellitePositionData, setSatellitePositionData] =
     useState<SatellitePositionData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -14,7 +14,6 @@ function App() {
 
   async function fetchStatus() {
     setError(null)
-    setResponse(null)
     setSatellitePositionData(null)
     setLoading(true)
     try {
@@ -22,10 +21,9 @@ function App() {
       const text = await res.text()
       try {
         const data = JSON.parse(text) as SatellitePositionData
-        setResponse(JSON.stringify(data, null, 2))
         setSatellitePositionData(data)
       } catch {
-        setResponse(text || `(empty, status ${res.status})`)
+        // non-JSON response: keep previous state
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Request failed')
@@ -41,7 +39,6 @@ function App() {
         const text = await res.text()
         const data = JSON.parse(text) as SatellitePositionData
         setSatellitePositionData(data)
-        setResponse(JSON.stringify(data, null, 2))
       } catch {
         // keep previous state on poll error
       }
@@ -71,12 +68,7 @@ function App() {
       </form>
 
       {error && <p className="error">{error}</p>}
-      {response && (
-        <div className="response">
-          <h2>Response</h2>
-          <pre><code>{response}</code></pre>
-        </div>
-      )}
+      <SatelliteCoordinatesBox satellitePositionData={satellitePositionData} />
     </div>
   )
 }

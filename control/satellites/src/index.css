@@ -144,11 +144,24 @@ h1 {
   margin: 0 0 0.5rem;
 }
 
-.response pre {
+.response pre.response-content {
   background: #f4f4f4;
   padding: 1rem;
   border-radius: 4px;
   overflow: auto;
   margin: 0;
   font-size: 0.875rem;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+.response .response-code {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

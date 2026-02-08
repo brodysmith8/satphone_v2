@@ -1,6 +1,7 @@
 #pragma once
 
-#include <vector>
+#include <string>
+#include <unordered_map>
 #include "Simulatable.hpp"
 
 /**
@@ -15,9 +16,9 @@ public:
     /** Set up routes and run the HTTP server (blocking). */
     void run();
 
-    /** Add Simulatable objects */
-    void add_objects(std::vector<Simulatable*>);
+    /** Add Simulatable objects (id -> pointer). */
+    void add_objects(std::unordered_map<std::string, Simulatable*>);
 
 private:
-    std::vector<Simulatable*> objects_;
+    std::unordered_map<std::string, Simulatable*> objects_;
 };

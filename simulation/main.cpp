@@ -2,7 +2,7 @@
 #include "Simulation.hpp"
 #include <iostream>
 #include <thread>
-#include <vector>
+#include <unordered_map>
 
 // Example simulatable: a simple counter
 struct Counter : Simulatable {
@@ -12,7 +12,7 @@ struct Counter : Simulatable {
 int main() {
     Simulation sim(0.1);
     Counter c1, c2;
-    std::vector<Simulatable*> objects = {&c1, &c2};
+    std::unordered_map<std::string, Simulatable*> objects = {{"c1", &c1}, {"c2", &c2}};
     sim.add(&c1);
     sim.add(&c2);
     // Simulation thread: runs the simulation

@@ -13,11 +13,8 @@ void App::run() {
         [this](const HttpRequestPtr&,
                std::function<void(const HttpResponsePtr&)>&& callback) {
             Json::Value body;
-            int i = 0;
-            for (Simulatable* obj : objects_) {
-                double v = obj->value();
-                body[std::to_string(i)] = v;
-                i++;
+            for (const auto& [id, obj] : objects_) {
+                body[id] = obj->value();
             }
             auto resp = HttpResponse::newHttpJsonResponse(body);
             callback(resp);
@@ -42,6 +39,6 @@ void App::run() {
     app().addListener("0.0.0.0", port).run();
 }
 
-void App::add_objects(std::vector<Simulatable*> objects) {
-    objects_ = objects;
+void App::add_objects(std::unordered_map<std::string, Simulatable*> objects) {
+    objects_ = std::move(objects);
 }

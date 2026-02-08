@@ -10,11 +10,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const LAT_LON_SCALE = 1e7
+const ANGULAR_EXAGGERATION = 1e6
 const MAP_WIDTH = 800
 const MAP_HEIGHT = 400
 const ZOOM_MIN = 0.5
 const ZOOM_MAX = 4
 const ZOOM_STEP = 0.25
+/** Pixels per "exaggerated degree" so small offsets are visible (matches Globe). */
+const PX_PER_EXAG_DEG = 3
 
 export type MapViewPosition = {
   latitude: number
@@ -30,9 +33,36 @@ export type MapViewProps = {
   satellitePositionData: MapViewPositionData | null
 }
 
-function lonLatToXY(lonDeg: number, latDeg: number, width: number, height: number) {
-  const x = ((lonDeg + 180) / 360) * width
-  const y = (1 - (latDeg + 90) / 180) * height
+/** Center of satellite cluster in degrees (same as Globe). */
+function computeCenter(entries: [string, MapViewPosition][]): { latDeg: number; lonDeg: number } {
+  if (entries.length === 0) return { latDeg: 0, lonDeg: 0 }
+  let sumLat = 0
+  let sumLon = 0
+  for (const [, pos] of entries) {
+    sumLat += pos.latitude / LAT_LON_SCALE
+    sumLon += pos.longitude / LAT_LON_SCALE
+  }
+  return {
+    latDeg: sumLat / entries.length,
+    lonDeg: sumLon / entries.length,
+  }
+}
+
+/**
+ * Project lat/lon to SVG x,y using same center + exaggeration as Globe.
+ * Origin is map center; small angular offsets are scaled so satellites don't overlap.
+ */
+function lonLatToXY(
+  lonDeg: number,
+  latDeg: number,
+  center: { latDeg: number; lonDeg: number },
+  width: number,
+  height: number
+) {
+  const dLon = (lonDeg - center.lonDeg) * ANGULAR_EXAGGERATION
+  const dLat = (latDeg - center.latDeg) * ANGULAR_EXAGGERATION
+  const x = width / 2 + dLon * PX_PER_EXAG_DEG
+  const y = height / 2 - dLat * PX_PER_EXAG_DEG
   return { x, y }
 }
 
@@ -60,15 +90,27 @@ export function MapView({ satellitePositionData }: MapViewProps) {
   const [panX, setPanX] = useState(0)
   const [panY, setPanY] = useState(0)
   const [drag, setDrag] = useState<DragState | null>(null)
+  /** Fixed reference frame: set once from first data so only satellites move. */
+  const [referenceCenter, setReferenceCenter] = useState<{
+    latDeg: number
+    lonDeg: number
+  } | null>(null)
 
   const entries = satellitePositionData ? Object.entries(satellitePositionData) : []
   const width = MAP_WIDTH
   const height = MAP_HEIGHT
 
+  useEffect(() => {
+    if (entries.length === 0 || referenceCenter !== null) return
+    setReferenceCenter(computeCenter(entries as [string, MapViewPosition][]))
+  }, [entries.length, referenceCenter])
+
+  const center = referenceCenter ?? { latDeg: 0, lonDeg: 0 }
+
   const points = entries.map(([id, pos]) => {
     const latDeg = pos.latitude / LAT_LON_SCALE
     const lonDeg = pos.longitude / LAT_LON_SCALE
-    return { id, ...lonLatToXY(lonDeg, latDeg, width, height), height: pos.height }
+    return { id, ...lonLatToXY(lonDeg, latDeg, center, width, height), height: pos.height }
   })
 
   const visibleWidth = width / zoom

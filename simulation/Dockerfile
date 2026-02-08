@@ -2,7 +2,7 @@
 FROM drogonframework/drogon:latest AS builder
 WORKDIR /build
 
-COPY * ./
+COPY . .
 RUN mkdir -p build && cd build && \
     cmake .. && cmake --build .
 

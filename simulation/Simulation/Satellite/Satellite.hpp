@@ -4,23 +4,30 @@
 
 /**
  * Simulatable satellite with position (latitude, longitude, height).
- * Coordinates default to 0; use the overloaded constructor to set them.
+ * Uses real orbital mechanics: circular orbit with inclination and RAAN,
+ * propagated in time and converted to subsatellite lat/lon (radians) and height (m).
  */
 class Satellite : public Simulatable {
 public:
-    /** Default position (0, 0, 0). */
+    /** Default: equator at 0 lon, 400 km altitude, 51.6° inclination. */
     Satellite();
 
-    /** Position with explicit latitude, longitude, and height. */
-    Satellite(double latitude, double longitude, double height);
+    /** Initial subsatellite point (lat/lon in radians, height in m). Orbit plane is inferred. */
+    Satellite(double latitude_rad, double longitude_rad, double height_m);
 
     void step(double dt) override;
 
-    /** Returns JSON with keys "latitude", "longitude", "height" (numeric). */
+    /** Returns JSON with keys "latitude", "longitude" (radians), "height" (m). */
     Json::Value value() const override;
 
 private:
+    void updateLatLonFromOrbit();
+
     double latitude_;
     double longitude_;
     double height_;
+    double inclination_rad_;
+    double raan_rad_;
+    double mean_anomaly_rad_;
+    double sim_time_s_;
 };

@@ -91,7 +91,7 @@ function SphereScene({
         castShadow
         shadow-mapSize={[2048, 2048]}
       />
-      <ambientLight intensity={0.65} />
+      <ambientLight intensity={0.9} />
       <EarthSphere />
       {entries.map(([id, state]) => (
         <SatelliteNode
@@ -120,7 +120,7 @@ export function Globe({ satellitePositionData }: GlobeProps) {
   return (
     <div className="sphere-container">
       <Canvas
-        camera={{ position: [0, 0, 4.5], fov: 50 }}
+        camera={{ position: [0, 0, 3.2], fov: 50 }}
         gl={{ antialias: true }}
         shadows
       >

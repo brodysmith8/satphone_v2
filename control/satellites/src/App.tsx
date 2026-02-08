@@ -9,28 +9,6 @@ const STATUS_URL = 'http://localhost:8848/status/all'
 function App() {
   const [satellitePositionData, setSatellitePositionData] =
     useState<SatellitePositionData | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function fetchStatus() {
-    setError(null)
-    setSatellitePositionData(null)
-    setLoading(true)
-    try {
-      const res = await fetch(STATUS_URL)
-      const text = await res.text()
-      try {
-        const data = JSON.parse(text) as SatellitePositionData
-        setSatellitePositionData(data)
-      } catch {
-        // non-JSON response: keep previous state
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Request failed')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   useEffect(() => {
     const poll = async () => {
@@ -48,11 +26,6 @@ function App() {
     return () => clearInterval(id)
   }, [])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    await fetchStatus()
-  }
-
   return (
     <div className="app">
       <h1>Satellites</h1>
@@ -61,13 +34,6 @@ function App() {
 
       <MapView satellitePositionData={satellitePositionData} />
 
-      <form onSubmit={handleSubmit} className="status-form">
-        <button type="submit" disabled={loading}>
-          {loading ? 'Loading…' : 'GET /status/all'}
-        </button>
-      </form>
-
-      {error && <p className="error">{error}</p>}
       <SatelliteCoordinatesBox satellitePositionData={satellitePositionData} />
     </div>
   )

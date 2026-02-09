@@ -1,6 +1,9 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Html, OrbitControls, useTexture } from '@react-three/drei'
-import { useState } from 'react'
+import { createContext, useRef, useState, useContext, type CSSProperties } from 'react'
+
+/** True when the pointer is over the Globe container; used to deactivate satellite focus when cursor leaves. */
+const GlobeHoverContext = createContext(false)
 
 import earthTextureUrl from './assets/earth_5400x2700.png'
 import {
@@ -47,11 +50,19 @@ function labelOpacityFromDot(dot: number): number {
   return dot / LABEL_FADE_FULL_VISIBLE
 }
 
+/** Depth range over which focus fades from 1 to 0 (in world units). Larger = smoother transition. */
+const FOCUS_DEPTH_RANGE = 0.5
+
 type SatelliteNodeProps = SatellitePosition & {
   id: string
   /** Camera position in world space; when provided, label opacity fades as satellite goes behind Earth. */
   cameraPosition: [number, number, number] | null
+  /** Focus strength 0–1; 1 = closest to camera. Drives box opacity for gradual transition. */
+  focus: number
 }
+
+/** Lerp factor per frame (~60fps). Higher = snappier, lower = smoother. */
+const FOCUS_SMOOTHING = 0.18
 
 function SatelliteNode({
   id,
@@ -59,6 +70,7 @@ function SatelliteNode({
   latitude,
   longitude,
   cameraPosition,
+  focus,
 }: SatelliteNodeProps) {
   const { latDeg, lonDeg, heightKm } = positionToDegrees({
     latitude,
@@ -77,6 +89,19 @@ function SatelliteNode({
       : x * cameraPosition[0] + y * cameraPosition[1] + z * cameraPosition[2]
   const labelOpacity = labelOpacityFromDot(dot)
 
+  const displayFocusRef = useRef(focus)
+  const lastRenderedRef = useRef(focus)
+  const [displayFocus, setDisplayFocus] = useState(focus)
+  useFrame(() => {
+    displayFocusRef.current +=
+      (focus - displayFocusRef.current) * FOCUS_SMOOTHING
+    const next = displayFocusRef.current
+    if (Math.abs(next - lastRenderedRef.current) > 0.004) {
+      lastRenderedRef.current = next
+      setDisplayFocus(next)
+    }
+  })
+
   return (
     <group position={[x, y, z]}>
       <pointLight
@@ -91,17 +116,27 @@ function SatelliteNode({
         position={[0, -0.05, 0]}
         style={{
           pointerEvents: 'none',
-          opacity: labelOpacity,
+          opacity: labelOpacity * (0.4 + 0.6 * displayFocus),
           transition: 'opacity 0.08s ease-out',
         }}
         distanceFactor={4}
       >
-        <div className="globe-satellite-label-stack">
-          <div className="globe-satellite-label">
-            <div className="globe-satellite-label-id">{id}</div>
+        <div
+          className="globe-satellite-label-stack"
+          style={
+            {
+              '--focus': displayFocus,
+              zIndex: displayFocus > 0.01 ? Math.round(50 + displayFocus * 50) : 0,
+            } as CSSProperties & { '--focus': number }
+          }
+        >
+          <div className="globe-satellite-label-line globe-satellite-label-line--name">
+            <div className="globe-satellite-label globe-satellite-label-id">
+              {id}
+            </div>
           </div>
           <div className="globe-satellite-label-spacer" aria-hidden />
-          <div className="globe-satellite-label">
+          <div className="globe-satellite-label-line">
             <div className="globe-satellite-label-coords">
               <span>lat: {latR.toFixed(1)}°</span>
               <span>lon: {lonR.toFixed(1)}°</span>
@@ -143,6 +178,7 @@ function SphereScene({
   positions: SatellitePositionData | null
 }) {
   const { camera } = useThree()
+  const isPointerOverGlobe = useContext(GlobeHoverContext)
   const [cameraPosition, setCameraPosition] = useState<[number, number, number]>(
     () => [camera.position.x, camera.position.y, camera.position.z]
   )
@@ -155,6 +191,23 @@ function SphereScene({
   })
 
   const entries = positions ? Object.entries(positions) : []
+  const [cx, cy, cz] = cameraPosition
+  const distances = new Map<string, number>()
+  let minDistance = Infinity
+  for (const [id, state] of entries) {
+    const { latDeg, lonDeg } = positionToDegrees({
+      latitude: state.latitude,
+      longitude: state.longitude,
+      height: state.height,
+    })
+    const [x, y, z] = sphericalToCartesian(latDeg, lonDeg, state.height)
+    const dx = x - cx
+    const dy = y - cy
+    const dz = z - cz
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz)
+    distances.set(id, d)
+    if (d < minDistance) minDistance = d
+  }
   return (
     <>
       <directionalLight
@@ -165,16 +218,25 @@ function SphereScene({
       />
       <ambientLight intensity={0.9} />
       <EarthSphere />
-      {entries.map(([id, state]) => (
-        <SatelliteNode
-          key={id}
-          id={id}
-          latitude={state.latitude}
-          longitude={state.longitude}
-          height={state.height}
-          cameraPosition={cameraPosition}
-        />
-      ))}
+      {entries.map(([id, state]) => {
+        const d = distances.get(id) ?? Infinity
+        const computedFocus = Math.max(
+          0,
+          1 - (d - minDistance) / FOCUS_DEPTH_RANGE
+        )
+        const focus = isPointerOverGlobe ? computedFocus : 0
+        return (
+          <SatelliteNode
+            key={id}
+            id={id}
+            latitude={state.latitude}
+            longitude={state.longitude}
+            height={state.height}
+            cameraPosition={cameraPosition}
+            focus={focus}
+          />
+        )
+      })}
       <OrbitControls
         enablePan={false}
         minDistance={2}
@@ -191,16 +253,23 @@ export type GlobeProps = {
 }
 
 export function Globe({ satellitePositionData }: GlobeProps) {
+  const [isPointerOverGlobe, setIsPointerOverGlobe] = useState(false)
   return (
-    <div className="sphere-container">
-      <Canvas
-        camera={{ position: [0, 0, 3.2], fov: 50 }}
-        gl={{ antialias: true }}
-        shadows
+    <GlobeHoverContext.Provider value={isPointerOverGlobe}>
+      <div
+        className="sphere-container"
+        onPointerEnter={() => setIsPointerOverGlobe(true)}
+        onPointerLeave={() => setIsPointerOverGlobe(false)}
       >
-        <SphereScene positions={satellitePositionData} />
-      </Canvas>
-      <p className="sphere-hint">Drag to rotate · Scroll to zoom</p>
-    </div>
+        <Canvas
+          camera={{ position: [0, 0, 3.2], fov: 50 }}
+          gl={{ antialias: true }}
+          shadows
+        >
+          <SphereScene positions={satellitePositionData} />
+        </Canvas>
+        <p className="sphere-hint">Drag to rotate · Scroll to zoom</p>
+      </div>
+    </GlobeHoverContext.Provider>
   )
 }

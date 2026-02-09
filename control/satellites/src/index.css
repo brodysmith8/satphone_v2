@@ -44,10 +44,33 @@ body {
 }
 
 .globe-satellite-label-stack {
+  --focus: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  position: relative;
+  gap: 0;
+}
+
+.globe-satellite-label-line {
+  width: max-content;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, calc(0.78 * var(--focus)));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, calc(0.12 * var(--focus))),
+    0 2px 6px rgba(0, 0, 0, calc(0.4 * var(--focus)));
+  transition: background 0.2s ease-out, box-shadow 0.2s ease-out;
+  backdrop-filter: blur(calc(4px * var(--focus)));
+}
+
+.globe-satellite-label-line--name {
+  padding: 1px 4px;
+  border-radius: 3px;
 }
 
 .globe-satellite-label-spacer {
@@ -56,10 +79,11 @@ body {
   flex-shrink: 0;
 }
 
-.globe-satellite-label {
+.globe-satellite-label,
+.globe-satellite-label-coords {
   text-align: center;
   white-space: nowrap;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.92);
   text-shadow: 0 0 2px rgba(0, 0, 0, 0.8), 0 1px 2px rgba(0, 0, 0, 0.6);
   width: max-content;
   max-width: 100%;
@@ -70,13 +94,13 @@ body {
 .globe-satellite-label-id {
   font-size: 6px;
   font-weight: 600;
-  margin-bottom: 0;
+  letter-spacing: 0.02em;
 }
 
 .globe-satellite-label-coords {
   font-size: 5px;
   font-family: "Courier New", Courier, monospace;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.7);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -150,6 +174,33 @@ body {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* Map satellite labels: focus-driven opacity and two rounded rects (name + coords), aligned with Globe */
+.map-satellite-label-group {
+  transition: opacity 0.08s ease-out;
+}
+
+.map-satellite-label-rect {
+  transition: fill 0.2s ease-out, stroke 0.2s ease-out;
+}
+
+.map-view-following {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.map-view-following strong {
+  font-weight: 600;
 }
 
 .map-view-hint {

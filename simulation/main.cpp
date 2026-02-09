@@ -23,6 +23,7 @@ int main() {
     });
 
     App app;
+    app.set_simulation(&sim);
     std::thread server_thread([&app, objects]() {
         // Server thread: runs the Drogon API server (blocking on this thread)
         app.add_objects(objects);

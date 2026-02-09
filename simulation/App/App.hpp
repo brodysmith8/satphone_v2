@@ -1,8 +1,11 @@
 #pragma once
 
+#include "Simulatable.hpp"
+#include "Simulation.hpp"
+#include "Satellite.hpp"
+#include <memory>
 #include <string>
 #include <unordered_map>
-#include "Simulatable.hpp"
 
 /**
  * Application image: Drogon HTTP API server.
@@ -16,9 +19,15 @@ public:
     /** Set up routes and run the HTTP server (blocking). */
     void run();
 
-    /** Add Simulatable objects (id -> pointer). */
+    /** Set the simulation instance to which dynamically created satellites are added/removed. */
+    void set_simulation(Simulation* sim) { simulation_ = sim; }
+
+    /** Add Simulatable objects (id -> pointer). Caller retains ownership. */
     void add_objects(std::unordered_map<std::string, Simulatable*>);
 
 private:
     std::unordered_map<std::string, Simulatable*> objects_;
+    std::unordered_map<std::string, std::unique_ptr<Satellite>> dynamic_satellites_;
+    size_t next_satellite_id_ = 0;
+    Simulation* simulation_ = nullptr;
 };

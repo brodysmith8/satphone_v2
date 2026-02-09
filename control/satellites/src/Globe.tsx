@@ -85,6 +85,31 @@ function SatelliteNode({
         distance={0.4}
         decay={2}
       />
+      {/* Single billboard: name and coords on same 2D plane with spacer for sphere */}
+      <Html
+        center
+        position={[0, -0.05, 0]}
+        style={{
+          pointerEvents: 'none',
+          opacity: labelOpacity,
+          transition: 'opacity 0.08s ease-out',
+        }}
+        distanceFactor={4}
+      >
+        <div className="globe-satellite-label-stack">
+          <div className="globe-satellite-label">
+            <div className="globe-satellite-label-id">{id}</div>
+          </div>
+          <div className="globe-satellite-label-spacer" aria-hidden />
+          <div className="globe-satellite-label">
+            <div className="globe-satellite-label-coords">
+              <span>lat: {latR.toFixed(1)}°</span>
+              <span>lon: {lonR.toFixed(1)}°</span>
+              <span>alt: {heightKm.toFixed(2)} km</span>
+            </div>
+          </div>
+        </div>
+      </Html>
       <mesh scale={scale} castShadow>
         <sphereGeometry args={[1, 16, 16]} />
         <meshStandardMaterial
@@ -94,25 +119,6 @@ function SatelliteNode({
           emissive="#332200"
         />
       </mesh>
-      <Html
-        center
-        position={[0, scale * 1.6, 0]}
-        style={{
-          pointerEvents: 'none',
-          opacity: labelOpacity,
-          transition: 'opacity 0.08s ease-out',
-        }}
-        distanceFactor={4}
-      >
-        <div className="globe-satellite-label">
-          <div className="globe-satellite-label-id">{id}</div>
-          <div className="globe-satellite-label-coords">
-            <span>lat: {latR.toFixed(1)}°</span>
-            <span>lon: {lonR.toFixed(1)}°</span>
-            <span>alt: {heightKm.toFixed(2)} km</span>
-          </div>
-        </div>
-      </Html>
     </group>
   )
 }

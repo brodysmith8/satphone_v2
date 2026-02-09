@@ -96,6 +96,11 @@ export function MapView({ satellitePositionData }: MapViewProps) {
 
   const zoomIn = useCallback(() => setZoom((z: number) => clampZoom(z + ZOOM_STEP)), [])
   const zoomOut = useCallback(() => setZoom((z: number) => clampZoom(z - ZOOM_STEP)), [])
+  const resetView = useCallback(() => {
+    setZoom(1)
+    setPanX(0)
+    setPanY(0)
+  }, [])
 
   useEffect(() => {
     const el = svgRef.current
@@ -154,10 +159,15 @@ export function MapView({ satellitePositionData }: MapViewProps) {
   return (
     <div className="map-view-container">
       <div className="map-view-zoom-controls">
+        {zoom !== 1 && (
+          <button type="button" className="map-view-zoom-reset" onClick={resetView} aria-label="Reset zoom" title="Reset zoom and pan">
+            <span className="map-view-zoom-reset-icon">⟲</span>
+          </button>
+        )}
         <button type="button" onClick={zoomIn} aria-label="Zoom in" title="Zoom in">
           +
         </button>
-        <span className="map-view-zoom-level">{Math.round(zoom * 100)}%</span>
+        {zoom !== 1 && <span className="map-view-zoom-level">{Math.round(zoom * 100)}%</span>}
         <button type="button" onClick={zoomOut} aria-label="Zoom out" title="Zoom out">
           −
         </button>

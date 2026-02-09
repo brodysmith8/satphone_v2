@@ -109,6 +109,19 @@ body {
   background: rgba(255, 255, 255, 0.25);
 }
 
+.map-view-zoom-controls button.map-view-zoom-reset {
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.map-view-zoom-controls .map-view-zoom-reset-icon {
+  display: inline-block;
+  transform: rotate(-70deg);
+}
+
 .map-view-zoom-level {
   min-width: 2.5rem;
   font-size: 0.75rem;

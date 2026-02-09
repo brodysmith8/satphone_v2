@@ -1,5 +1,5 @@
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, useTexture } from '@react-three/drei'
+import { Html, OrbitControls, useTexture } from '@react-three/drei'
 
 import earthTextureUrl from './assets/earth_5400x2700.png'
 import {
@@ -33,7 +33,9 @@ function sphericalToCartesian(
 
 export type { SatellitePosition, SatellitePositionData }
 
-function SatelliteNode({ height, latitude, longitude }: SatellitePosition) {
+type SatelliteNodeProps = SatellitePosition & { id: string }
+
+function SatelliteNode({ id, height, latitude, longitude }: SatelliteNodeProps) {
   const { latDeg, lonDeg, heightKm } = positionToDegrees({
     latitude,
     longitude,
@@ -42,6 +44,8 @@ function SatelliteNode({ height, latitude, longitude }: SatellitePosition) {
   const [x, y, z] = sphericalToCartesian(latDeg, lonDeg, height)
   const r = 1 + heightKm / EARTH_RADIUS_KM
   const scale = Math.max(0.012, Math.min(0.04, (r - 1) * 3 + 0.015))
+  const latR = Math.round(latDeg * 10) / 10
+  const lonR = Math.round(lonDeg * 10) / 10
   return (
     <group position={[x, y, z]}>
       <pointLight
@@ -59,6 +63,21 @@ function SatelliteNode({ height, latitude, longitude }: SatellitePosition) {
           emissive="#332200"
         />
       </mesh>
+      <Html
+        center
+        position={[0, scale * 1.6, 0]}
+        style={{ pointerEvents: 'none' }}
+        distanceFactor={4}
+      >
+        <div className="globe-satellite-label">
+          <div className="globe-satellite-label-id">{id}</div>
+          <div className="globe-satellite-label-coords">
+            <span>lat: {latR.toFixed(1)}°</span>
+            <span>lon: {lonR.toFixed(1)}°</span>
+            <span>alt: {heightKm.toFixed(2)} km</span>
+          </div>
+        </div>
+      </Html>
     </group>
   )
 }
@@ -96,6 +115,7 @@ function SphereScene({
       {entries.map(([id, state]) => (
         <SatelliteNode
           key={id}
+          id={id}
           latitude={state.latitude}
           longitude={state.longitude}
           height={state.height}

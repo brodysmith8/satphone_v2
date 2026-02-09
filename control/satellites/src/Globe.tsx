@@ -1,5 +1,6 @@
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Html, OrbitControls, useTexture } from '@react-three/drei'
+import { useState } from 'react'
 
 import earthTextureUrl from './assets/earth_5400x2700.png'
 import {
@@ -33,9 +34,32 @@ function sphericalToCartesian(
 
 export type { SatellitePosition, SatellitePositionData }
 
-type SatelliteNodeProps = SatellitePosition & { id: string }
+/**
+ * Dot product (satellite · camera) at which the label reaches full opacity.
+ * As the satellite moves toward the limb (dot → 0) and behind (dot < 0), label opacity
+ * fades linearly from 1 to 0 over the range [0, LABEL_FADE_FULL_VISIBLE].
+ */
+const LABEL_FADE_FULL_VISIBLE = 0.25
 
-function SatelliteNode({ id, height, latitude, longitude }: SatelliteNodeProps) {
+function labelOpacityFromDot(dot: number): number {
+  if (dot >= LABEL_FADE_FULL_VISIBLE) return 1
+  if (dot <= 0) return 0
+  return dot / LABEL_FADE_FULL_VISIBLE
+}
+
+type SatelliteNodeProps = SatellitePosition & {
+  id: string
+  /** Camera position in world space; when provided, label opacity fades as satellite goes behind Earth. */
+  cameraPosition: [number, number, number] | null
+}
+
+function SatelliteNode({
+  id,
+  height,
+  latitude,
+  longitude,
+  cameraPosition,
+}: SatelliteNodeProps) {
   const { latDeg, lonDeg, heightKm } = positionToDegrees({
     latitude,
     longitude,
@@ -46,6 +70,13 @@ function SatelliteNode({ id, height, latitude, longitude }: SatelliteNodeProps) 
   const scale = Math.max(0.012, Math.min(0.04, (r - 1) * 3 + 0.015))
   const latR = Math.round(latDeg * 10) / 10
   const lonR = Math.round(lonDeg * 10) / 10
+
+  const dot =
+    cameraPosition == null
+      ? 1
+      : x * cameraPosition[0] + y * cameraPosition[1] + z * cameraPosition[2]
+  const labelOpacity = labelOpacityFromDot(dot)
+
   return (
     <group position={[x, y, z]}>
       <pointLight
@@ -66,7 +97,11 @@ function SatelliteNode({ id, height, latitude, longitude }: SatelliteNodeProps) 
       <Html
         center
         position={[0, scale * 1.6, 0]}
-        style={{ pointerEvents: 'none' }}
+        style={{
+          pointerEvents: 'none',
+          opacity: labelOpacity,
+          transition: 'opacity 0.08s ease-out',
+        }}
         distanceFactor={4}
       >
         <div className="globe-satellite-label">
@@ -101,6 +136,18 @@ function SphereScene({
 }: {
   positions: SatellitePositionData | null
 }) {
+  const { camera } = useThree()
+  const [cameraPosition, setCameraPosition] = useState<[number, number, number]>(
+    () => [camera.position.x, camera.position.y, camera.position.z]
+  )
+
+  useFrame(() => {
+    const { x, y, z } = camera.position
+    setCameraPosition((prev: [number, number, number]) =>
+      prev[0] === x && prev[1] === y && prev[2] === z ? prev : [x, y, z]
+    )
+  })
+
   const entries = positions ? Object.entries(positions) : []
   return (
     <>
@@ -119,6 +166,7 @@ function SphereScene({
           latitude={state.latitude}
           longitude={state.longitude}
           height={state.height}
+          cameraPosition={cameraPosition}
         />
       ))}
       <OrbitControls

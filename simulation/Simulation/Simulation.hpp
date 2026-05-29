@@ -2,6 +2,7 @@
 
 #include "Simulatable.hpp"
 #include <cstddef>
+#include <functional>
 #include <mutex>
 #include <vector>
 
@@ -11,6 +12,10 @@
  */
 class Simulation {
 public:
+    /**
+     * Initialize the simulation with a time step.
+     * @param dt Time step duration (e.g. in seconds). Every simulatable object is modellable as f(dt)
+    */
     Simulation(double dt = 1.0): dt_(dt) {};
 
     /**
@@ -24,7 +29,13 @@ public:
      * The simulation does not take ownership; the caller is responsible for the object's lifetime.
      */
     void remove(Simulatable* obj);
-    
+
+    /**
+     * Run the given function while holding the simulation mutex.
+     * Use this when reading object state (e.g. for /status/all) so reads are consistent with steps.
+     */
+    void withLock(std::function<void()> f) const;
+
     /**
      * Run the simulation infinitely, advancing by dt_ each step.
      */
@@ -35,10 +46,10 @@ public:
     * @param duration Total simulated time to run.
     */
     void run_for_duration(double duration);
-    
+
     /** Number of simulatable objects currently registered. */
     size_t size() const;
-    
+
 private:
     /**
      * Advance the simulation by one time step: step all registered objects by dt.

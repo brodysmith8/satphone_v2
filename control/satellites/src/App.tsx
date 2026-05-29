@@ -9,6 +9,7 @@ const STATUS_URL = 'http://localhost:8848/status/all'
 function App() {
   const [satellitePositionData, setSatellitePositionData] =
     useState<SatellitePositionData | null>(null)
+  const [addSatelliteError, setAddSatelliteError] = useState<string | null>(null)
 
   useEffect(() => {
     const poll = async () => {
@@ -22,7 +23,7 @@ function App() {
       }
     }
     poll()
-    const id = setInterval(poll, 10) // 10 = 10ms poll interval
+    const id = setInterval(poll, 100) // 10 = 10ms poll interval
     return () => clearInterval(id)
   }, [])
 
@@ -32,9 +33,16 @@ function App() {
 
       <Globe satellitePositionData={satellitePositionData} />
 
-      <MapView satellitePositionData={satellitePositionData} />
+      <MapView
+        satellitePositionData={satellitePositionData}
+        onAddSatelliteError={(msg) => setAddSatelliteError(msg || null)}
+      />
 
-      <SatelliteCoordinatesBox satellitePositionData={satellitePositionData} />
+      <SatelliteCoordinatesBox
+        satellitePositionData={satellitePositionData}
+        addSatelliteError={addSatelliteError}
+        onDismissAddSatelliteError={() => setAddSatelliteError(null)}
+      />
     </div>
   )
 }

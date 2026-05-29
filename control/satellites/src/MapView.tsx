@@ -16,6 +16,9 @@ import {
   positionToDegrees,
 } from './satellitePosition'
 
+const API_BASE = 'http://localhost:8848'
+const DEFAULT_NEW_SATELLITE_HEIGHT_M = 400_000
+
 const MAP_WIDTH = 800
 const MAP_HEIGHT = 400
 const ZOOM_MIN = 0.5
@@ -43,6 +46,8 @@ export type MapViewPositionData = SatellitePositionData
 export type MapViewProps = {
   /** Satellite position data (JSON from API): lat/lon in radians, height in meters. */
   satellitePositionData: MapViewPositionData | null
+  /** Called when POST /satellite fails with an error message from the server (or a fallback). */
+  onAddSatelliteError?: (message: string) => void
 }
 
 /**
@@ -61,6 +66,18 @@ function lonLatToXY(
   return { x, y }
 }
 
+/** Inverse of lonLatToXY: map (x,y) to longitude/latitude in degrees. */
+function xyToLonLat(
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): { lonDeg: number; latDeg: number } {
+  const lonDeg = (x / width) * 360 - 180
+  const latDeg = 90 - (y / height) * 180
+  return { lonDeg, latDeg }
+}
+
 function clampZoom(zoom: number) {
   return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom))
 }
@@ -68,6 +85,20 @@ function clampZoom(zoom: number) {
 function clampPan(pan: number, visible: number, total: number) {
   const maxPan = Math.max(0, (total - visible) / 2)
   return Math.max(-maxPan, Math.min(maxPan, pan))
+}
+
+/**
+ * Parse SVG viewBox string "x y w h" into numbers.
+ */
+function parseViewBox(viewBox: string): { x: number; y: number; w: number; h: number } | null {
+  const parts = viewBox.trim().split(/\s+/)
+  if (parts.length !== 4) return null
+  const x = Number(parts[0])
+  const y = Number(parts[1])
+  const w = Number(parts[2])
+  const h = Number(parts[3])
+  if (!Number.isFinite(x + y + w + h) || w <= 0 || h <= 0) return null
+  return { x, y, w, h }
 }
 
 /**
@@ -105,7 +136,7 @@ type DragState = {
 
 type Point = { id: string; x: number; y: number; height: number }
 
-export function MapView({ satellitePositionData }: MapViewProps) {
+export function MapView({ satellitePositionData, onAddSatelliteError }: MapViewProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const viewParamsRef = useRef<{
     viewBoxX: number
@@ -121,10 +152,15 @@ export function MapView({ satellitePositionData }: MapViewProps) {
   const [mouseViewPos, setMouseViewPos] = useState<{ x: number; y: number } | null>(null)
   const [followedId, setFollowedId] = useState<string | null>(null)
   const [displayFocusMap, setDisplayFocusMap] = useState<Record<string, number>>({})
+  const [addSatelliteMode, setAddSatelliteMode] = useState(false)
+  const [addSatellitePending, setAddSatellitePending] = useState(false)
 
   const displayFocusRef = useRef<Record<string, number>>({})
   const targetFocusRef = useRef<Record<string, number>>({})
   const rafIdRef = useRef<number | null>(null)
+  const addSatelliteModeRef = useRef(addSatelliteMode)
+  addSatelliteModeRef.current = addSatelliteMode
+  const dragStateRef = useRef<DragState | null>(null)
 
   const entries = satellitePositionData ? Object.entries(satellitePositionData) : []
   const width = MAP_WIDTH
@@ -144,6 +180,9 @@ export function MapView({ satellitePositionData }: MapViewProps) {
       }),
     [entries, width, height]
   )
+
+  const pointsRef = useRef<Point[]>(points)
+  pointsRef.current = points
 
   /** Target focus 0–1 per id from distance to cursor; 1 = closest, 0 = beyond range. */
   const targetFocusMap = useMemo((): Record<string, number> => {
@@ -228,6 +267,53 @@ export function MapView({ satellitePositionData }: MapViewProps) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  const addSatelliteAtViewPos = useCallback(
+    async (viewX: number, viewY: number) => {
+      // Clamp to map bounds so we never send invalid lat/lon (e.g. from clicks in letterbox or panned-out area)
+      const clampedX = Math.max(0, Math.min(width, viewX))
+      const clampedY = Math.max(0, Math.min(height, viewY))
+      const { lonDeg, latDeg } = xyToLonLat(clampedX, clampedY, width, height)
+      const latRad = (latDeg * Math.PI) / 180
+      const lonRad = (lonDeg * Math.PI) / 180
+      // Validate before sending: API expects lat in [-π/2, π/2], lon in [-π, π]
+      const latOk = Number.isFinite(latRad) && latRad >= -Math.PI / 2 && latRad <= Math.PI / 2
+      const lonOk = Number.isFinite(lonRad) && lonRad >= -Math.PI && lonRad <= Math.PI
+      if (!latOk || !lonOk) {
+        onAddSatelliteError?.('Invalid map position. Click on the map.')
+        return
+      }
+      setAddSatellitePending(true)
+      if (onAddSatelliteError) onAddSatelliteError('')  // clear previous error
+      try {
+        const res = await fetch(`${API_BASE}/satellite`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            latitude: latRad,
+            longitude: lonRad,
+            height: DEFAULT_NEW_SATELLITE_HEIGHT_M,
+          }),
+        })
+        if (!res.ok) {
+          let message = `Add satellite failed (${res.status}).`
+          try {
+            const data = (await res.json()) as { error?: string }
+            if (typeof data?.error === 'string' && data.error.trim()) message = data.error
+          } catch {
+            // keep fallback message
+          }
+          onAddSatelliteError?.(message)
+        }
+      } finally {
+        setAddSatellitePending(false)
+      }
+    },
+    [width, height, onAddSatelliteError]
+  )
+
+  const addSatelliteAtViewPosRef = useRef(addSatelliteAtViewPos)
+  addSatelliteAtViewPosRef.current = addSatelliteAtViewPos
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       if (e.button !== 0 || !svgRef.current) return
@@ -235,72 +321,70 @@ export function MapView({ satellitePositionData }: MapViewProps) {
       const rect = svgRef.current.getBoundingClientRect()
       const scaleX = visibleWidth / rect.width
       const scaleY = visibleHeight / rect.height
-      setDrag({
+      const dragState: DragState = {
         clientX: e.clientX,
         clientY: e.clientY,
         startPanX: panX,
         startPanY: panY,
         scaleX,
         scaleY,
-      })
-    },
-    [visibleWidth, visibleHeight, panX, panY]
-  )
+      }
+      dragStateRef.current = dragState
+      setDrag(dragState)
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!drag) return
-      const deltaX = (drag.clientX - e.clientX) * drag.scaleX
-      const deltaY = (drag.clientY - e.clientY) * drag.scaleY
-      setPanX(drag.startPanX + deltaX)
-      setPanY(drag.startPanY + deltaY)
-    },
-    [drag]
-  )
+      const onWindowMouseMove = (e: MouseEvent) => {
+        const d = dragStateRef.current
+        if (!d) return
+        const deltaX = (d.clientX - e.clientX) * d.scaleX
+        const deltaY = (d.clientY - e.clientY) * d.scaleY
+        setPanX(d.startPanX + deltaX)
+        setPanY(d.startPanY + deltaY)
+      }
 
-  const handleMouseUp = useCallback(
-    (e: MouseEvent) => {
-      if (!drag) return
-      const dragDist = Math.hypot(e.clientX - drag.clientX, e.clientY - drag.clientY)
-      if (dragDist <= CLICK_DRAG_THRESHOLD_PX) {
-        const vp = viewParamsRef.current
-        const viewPos = clientToView(
-          e.clientX,
-          e.clientY,
-          svgRef.current,
-          vp.viewBoxX,
-          vp.viewBoxY,
-          vp.visibleWidth,
-          vp.visibleHeight
-        )
-        if (viewPos) {
-          let closest: { id: string; d2: number } | null = null
-          for (const p of points) {
-            const d2 = (p.x - viewPos.x) ** 2 + (p.y - viewPos.y) ** 2
-            const r2 = SATELLITE_CLICK_RADIUS ** 2
-            if (d2 <= r2 && (closest == null || d2 < closest.d2)) closest = { id: p.id, d2 }
-          }
-          if (closest) {
-            setFollowedId((prev: string | null) => (prev === closest!.id ? null : closest!.id))
-          } else {
-            setFollowedId(null)
+      const onWindowMouseUp = (e: MouseEvent) => {
+        const d = dragStateRef.current
+        if (!d) return
+        window.removeEventListener('mousemove', onWindowMouseMove)
+        window.removeEventListener('mouseup', onWindowMouseUp)
+        dragStateRef.current = null
+        setDrag(null)
+
+        const dragDist = Math.hypot(e.clientX - d.clientX, e.clientY - d.clientY)
+        if (dragDist <= CLICK_DRAG_THRESHOLD_PX) {
+          const svg = svgRef.current
+          const viewBoxStr = svg?.getAttribute('viewBox')
+          const vb = viewBoxStr ? parseViewBox(viewBoxStr) : null
+          const vx = vb ? vb.x : viewParamsRef.current.viewBoxX
+          const vy = vb ? vb.y : viewParamsRef.current.viewBoxY
+          const vw = vb ? vb.w : viewParamsRef.current.visibleWidth
+          const vh = vb ? vb.h : viewParamsRef.current.visibleHeight
+          const viewPos = clientToView(e.clientX, e.clientY, svg, vx, vy, vw, vh)
+          if (viewPos) {
+            if (addSatelliteModeRef.current) {
+              addSatelliteAtViewPosRef.current(viewPos.x, viewPos.y)
+            } else {
+              const pts = pointsRef.current
+              let closest: { id: string; d2: number } | null = null
+              for (const p of pts) {
+                const d2 = (p.x - viewPos.x) ** 2 + (p.y - viewPos.y) ** 2
+                const r2 = SATELLITE_CLICK_RADIUS ** 2
+                if (d2 <= r2 && (closest == null || d2 < closest.d2)) closest = { id: p.id, d2 }
+              }
+              if (closest) {
+                setFollowedId((prev: string | null) => (prev === closest!.id ? null : closest!.id))
+              } else {
+                setFollowedId(null)
+              }
+            }
           }
         }
       }
-      setDrag(null)
-    },
-    [drag, points]
-  )
 
-  useEffect(() => {
-    if (!drag) return
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [drag, handleMouseMove, handleMouseUp])
+      window.addEventListener('mousemove', onWindowMouseMove)
+      window.addEventListener('mouseup', onWindowMouseUp)
+    },
+    [visibleWidth, visibleHeight, panX, panY]
+  )
 
   const handleSvgMouseMove = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
@@ -321,9 +405,27 @@ export function MapView({ satellitePositionData }: MapViewProps) {
 
   const handleSvgMouseLeave = useCallback(() => setMouseViewPos(null), [])
 
+  /** Low-opacity satellite cursor for add mode (24x24, hotspot center). */
+  const addModeCursor =
+    "url('data:image/svg+xml," +
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="6" fill="#f0c040" fill-opacity="0.4" stroke="#2a2a3e" stroke-width="1.5"/></svg>'
+    ) +
+    "') 12 12, crosshair"
+
   return (
     <div className="map-view-container">
       <div className="map-view-zoom-controls">
+        <button
+          type="button"
+          className={`map-view-add-satellite-toggle${addSatelliteMode ? ' map-view-add-satellite-toggle--on' : ''}`}
+          onClick={() => setAddSatelliteMode((v: boolean) => !v)}
+          disabled={addSatellitePending}
+          aria-label={addSatelliteMode ? 'Exit add satellite mode' : 'Add satellite mode'}
+          title={addSatelliteMode ? 'Exit add satellite mode (click map to place)' : 'Add satellite: click map to place a new satellite'}
+        >
+          <span className="map-view-add-satellite-icon" aria-hidden>⊕</span>
+        </button>
         {zoom !== 1 && (
           <button type="button" className="map-view-zoom-reset" onClick={resetView} aria-label="Reset zoom" title="Reset zoom and pan">
             <span className="map-view-zoom-reset-icon">⟲</span>
@@ -345,7 +447,10 @@ export function MapView({ satellitePositionData }: MapViewProps) {
         onMouseDown={handleMouseDown}
         onMouseMove={handleSvgMouseMove}
         onMouseLeave={handleSvgMouseLeave}
-        style={{ cursor: drag ? 'grabbing' : 'grab', userSelect: drag ? 'none' : undefined }}
+        style={{
+          cursor: addSatelliteMode ? addModeCursor : drag ? 'grabbing' : 'grab',
+          userSelect: drag ? 'none' : undefined,
+        }}
       >
         <defs>
           <pattern id="grid" width={40} height={40} patternUnits="userSpaceOnUse">
@@ -366,6 +471,19 @@ export function MapView({ satellitePositionData }: MapViewProps) {
         <line x1={0} y1={height / 2} x2={width} y2={height / 2} stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
         {/* Prime meridian */}
         <line x1={width / 2} y1={0} x2={width / 2} y2={height} stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
+        {/* Ghost satellite at cursor when in add-satellite mode (low opacity placeholder) */}
+        {addSatelliteMode && mouseViewPos && (
+          <circle
+            cx={mouseViewPos.x}
+            cy={mouseViewPos.y}
+            r={6}
+            fill="#f0c040"
+            stroke="#2a2a3e"
+            strokeWidth={1.5}
+            opacity={0.4}
+            pointerEvents="none"
+          />
+        )}
         {(() => {
           const lineHeight = 11
           const labelYOffset = 20
@@ -471,8 +589,10 @@ export function MapView({ satellitePositionData }: MapViewProps) {
         </p>
       )}
       <p className="map-view-hint">
-        Equirectangular map · True lat/lon from simulator · Scroll to zoom · Drag to pan
-        {mouseViewPos != null ? ' · Closest label highlighted' : ''}
+        {addSatelliteMode
+          ? 'Add satellite mode · Click map to place a new satellite (400 km altitude)'
+          : 'Equirectangular map · True lat/lon from simulator · Scroll to zoom · Drag to pan'}
+        {!addSatelliteMode && mouseViewPos != null ? ' · Closest label highlighted' : ''}
       </p>
     </div>
   )

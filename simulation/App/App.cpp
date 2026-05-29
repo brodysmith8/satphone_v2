@@ -1,36 +1,151 @@
 #include "App.hpp"
 #include <drogon/drogon.h>
 #include <cstdlib>
+#include <stdexcept>
 #include <string>
 
 using namespace drogon;
 
 App::App() {}
 
+namespace {
+    HttpResponsePtr corsPreflightResponse() {
+        auto resp = HttpResponse::newHttpResponse();
+        resp->setStatusCode(k204NoContent);
+        resp->addHeader("Access-Control-Allow-Origin", "*");
+        resp->addHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+        resp->addHeader("Access-Control-Allow-Headers", "Content-Type");
+        resp->addHeader("Access-Control-Max-Age", "86400");
+        return resp;
+    }
+} // namespace
+
 void App::run() {
-    // POST /satellite — create a new satellite and add it to the simulation
+    // Handle CORS preflight (OPTIONS) before routing so DELETE is in Allow-Methods (Drogon’s
+    // built-in OPTIONS handling can otherwise reply without it).
+    app().registerPreRoutingAdvice(
+        [](const HttpRequestPtr& req,
+           std::function<void(const HttpResponsePtr&)>&& fcb,
+           std::function<void()>&& fccb) {
+            if (req->method() != Options) {
+                fccb();
+                return;
+            }
+            const std::string& path = req->path();
+            bool isApi = (path.size() >= 10 && path.compare(0, 10, "/satellite") == 0) ||
+                         (path.size() >= 7 && path.compare(0, 7, "/status") == 0);
+            if (isApi) {
+                fcb(corsPreflightResponse());
+                return;
+            }
+            fccb();
+        });
+
+    // CORS preflight (OPTIONS) — per-route fallback
+    app().registerHandler(
+        "/satellite",
+        [](const HttpRequestPtr&,
+           std::function<void(const HttpResponsePtr&)>&& callback) {
+            callback(corsPreflightResponse());
+        },
+        {Options});
+    app().registerHandler(
+        "/satellite/{id}",
+        [](const HttpRequestPtr&,
+           std::function<void(const HttpResponsePtr&)>&& callback,
+           const std::string&) {
+            callback(corsPreflightResponse());
+        },
+        {Options});
+    app().registerHandler(
+        "/status/all",
+        [](const HttpRequestPtr&,
+           std::function<void(const HttpResponsePtr&)>&& callback) {
+            callback(corsPreflightResponse());
+        },
+        {Options});
+
+    // POST /satellite — create a new satellite and add it to the simulation.
+    // Requires valid JSON body with latitude, longitude, height (radians, radians, meters).
     app().registerHandler(
         "/satellite",
         [this](const HttpRequestPtr& req,
                std::function<void(const HttpResponsePtr&)>&& callback) {
-            std::unique_ptr<Satellite> sat;
             auto jsonPtr = req->getJsonObject();
-            if (jsonPtr && jsonPtr->isObject() &&
-                jsonPtr->isMember("latitude") && jsonPtr->isMember("longitude") && jsonPtr->isMember("height")) {
-                double lat = (*jsonPtr)["latitude"].asDouble();
-                double lon = (*jsonPtr)["longitude"].asDouble();
-                double height = (*jsonPtr)["height"].asDouble();
+            if (!jsonPtr || !jsonPtr->isObject()) {
+                Json::Value err;
+                err["error"] = "Request body must be JSON with latitude, longitude, height (Content-Type: application/json).";
+                if (!req->getJsonError().empty()) {
+                    err["error"] = "Invalid JSON: " + req->getJsonError();
+                }
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            if (!jsonPtr->isMember("latitude") || !jsonPtr->isMember("longitude") || !jsonPtr->isMember("height")) {
+                Json::Value err;
+                err["error"] = "Missing latitude, longitude, or height.";
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            const Json::Value& jlat = (*jsonPtr)["latitude"];
+            const Json::Value& jlon = (*jsonPtr)["longitude"];
+            const Json::Value& jheight = (*jsonPtr)["height"];
+            if (jlat.isNull() || jlon.isNull() || jheight.isNull()) {
+                Json::Value err;
+                err["error"] = "latitude, longitude, and height must be numbers (not null).";
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            double lat = jlat.asDouble();
+            double lon = jlon.asDouble();
+            double height = jheight.asDouble();
+
+            if (!simulation_) {
+                Json::Value err;
+                err["error"] = "Simulation not available; cannot create satellites.";
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k503ServiceUnavailable);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+
+            std::unique_ptr<Satellite> sat;
+            try {
                 sat = std::make_unique<Satellite>(lat, lon, height);
-            } else {
-                sat = std::make_unique<Satellite>();
+            } catch (const std::invalid_argument& e) {
+                Json::Value err;
+                err["error"] = e.what();
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
             }
             Satellite* raw = sat.get();
             std::string id = "sat_" + std::to_string(next_satellite_id_++);
+            try {
+                simulation_->add(raw);
+            } catch (...) {
+                Json::Value err;
+                err["error"] = "Failed to add satellite to simulation.";
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k503ServiceUnavailable);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
             dynamic_satellites_[id] = std::move(sat);
             objects_[id] = raw;
-            if (simulation_) {
-                simulation_->add(raw);
-            }
             Json::Value body;
             body["id"] = id;
             auto resp = HttpResponse::newHttpJsonResponse(body);
@@ -42,7 +157,7 @@ void App::run() {
 
     // DELETE /satellite/{id} — remove a dynamically created satellite and destruct it
     app().registerHandler(
-        "/satellite/{1}",
+        "/satellite/{id}",
         [this](const HttpRequestPtr&,
                std::function<void(const HttpResponsePtr&)>&& callback,
                const std::string& id) {
@@ -72,8 +187,16 @@ void App::run() {
         [this](const HttpRequestPtr&,
                std::function<void(const HttpResponsePtr&)>&& callback) {
             Json::Value body;
-            for (const auto& [id, obj] : objects_) {
-                body[id] = obj->value();
+            if (simulation_) {
+                simulation_->withLock([this, &body]() {
+                    for (const auto& [id, obj] : objects_) {
+                        body[id] = obj->value();
+                    }
+                });
+            } else {
+                for (const auto& [id, obj] : objects_) {
+                    body[id] = obj->value();
+                }
             }
             auto resp = HttpResponse::newHttpJsonResponse(body);
             resp->addHeader("Access-Control-Allow-Origin", "*");

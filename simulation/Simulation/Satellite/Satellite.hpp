@@ -12,7 +12,11 @@ public:
     /** Default: equator at 0 lon, 400 km altitude, 51.6° inclination. */
     Satellite();
 
-    /** Initial subsatellite point (lat/lon in radians, height in m). Orbit plane is inferred. */
+    /**
+     * Initial subsatellite point (lat/lon in radians, height in m). Orbit plane is inferred.
+     * Valid ranges: lat in [-π/2, π/2], lon in [-π, π], height in [0, 10'000 km].
+     * @throws std::invalid_argument if coordinates are out of range or NaN.
+     */
     Satellite(double latitude_rad, double longitude_rad, double height_m);
 
     void step(double dt) override;

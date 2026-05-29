@@ -1,17 +1,38 @@
 #include "Satellite.hpp"
 #include <cmath>
+#include <stdexcept>
+#include <string>
 
 namespace {
 constexpr double R_EARTH_M = 6371000.0;
 constexpr double MU_EARTH_M3_S2 = 3.986004418e14;
 constexpr double OMEGA_EARTH_RAD_S = 7.2921159e-5;  // rad/s
+constexpr double PI = 3.141592653589793;
+constexpr double MAX_HEIGHT_M = 10'000'000.0;  // 10,000 km
+
+/** Returns empty string if valid; otherwise an error message. */
+std::string validateCoordinates(double latitude_rad, double longitude_rad, double height_m) {
+    if (std::isnan(latitude_rad) || std::isnan(longitude_rad) || std::isnan(height_m)) {
+        return "Invalid coordinates: latitude, longitude, and height must be numbers.";
+    }
+    if (latitude_rad < -PI / 2 || latitude_rad > PI / 2) {
+        return "Invalid coordinates: latitude must be between -90° and 90° (radians: -π/2 to π/2).";
+    }
+    if (longitude_rad < -PI || longitude_rad > PI) {
+        return "Invalid coordinates: longitude must be between -180° and 180° (radians: -π to π).";
+    }
+    if (height_m < 0 || height_m > MAX_HEIGHT_M) {
+        return "Invalid coordinates: height must be between 0 and 10,000 km (meters).";
+    }
+    return {};
+}
 }  // namespace
 
 Satellite::Satellite()
     : latitude_(0),
       longitude_(0),
       height_(400e3),
-      inclination_rad_(51.6 * (3.141592653589793 / 180.0)),
+      inclination_rad_(51.6 * (PI / 180.0)),
       raan_rad_(0),
       mean_anomaly_rad_(0),
       sim_time_s_(0) {
@@ -22,10 +43,14 @@ Satellite::Satellite(double latitude_rad, double longitude_rad, double height_m)
     : latitude_(latitude_rad),
       longitude_(longitude_rad),
       height_(height_m),
-      inclination_rad_(51.6 * (3.141592653589793 / 180.0)),
+      inclination_rad_(51.6 * (PI / 180.0)),
       raan_rad_(0),
       mean_anomaly_rad_(0),
       sim_time_s_(0) {
+    std::string err = validateCoordinates(latitude_rad, longitude_rad, height_m);
+    if (!err.empty()) {
+        throw std::invalid_argument(err);
+    }
     const double incl = inclination_rad_;
     const double sin_incl = std::sin(incl), cos_incl = std::cos(incl);
     if (std::abs(sin_incl) < 1e-10) {
@@ -44,6 +69,9 @@ void Satellite::step(double dt) {
     const double a = R_EARTH_M + height_;
     const double n = std::sqrt(MU_EARTH_M3_S2 / (a * a * a));
     mean_anomaly_rad_ += n * dt;
+    constexpr double TWO_PI = 2.0 * PI;
+    mean_anomaly_rad_ = std::fmod(mean_anomaly_rad_, TWO_PI);
+    if (mean_anomaly_rad_ < 0) mean_anomaly_rad_ += TWO_PI;
     updateLatLonFromOrbit();
 }
 
@@ -65,7 +93,11 @@ void Satellite::updateLatLonFromOrbit() {
 
     const double r_xy = std::sqrt(x_ecef * x_ecef + y_ecef * y_ecef);
     latitude_ = std::atan2(z_ecef, r_xy);
-    longitude_ = std::atan2(y_ecef, x_ecef);
+    if (r_xy < 1e-10) {
+        longitude_ = 0;
+    } else {
+        longitude_ = std::atan2(y_ecef, x_ecef);
+    }
 }
 
 Json::Value Satellite::value() const {

@@ -150,6 +150,27 @@ body {
   background: rgba(255, 255, 255, 0.25);
 }
 
+.map-view-zoom-controls button.map-view-add-satellite-toggle {
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.map-view-zoom-controls button.map-view-add-satellite-toggle--on {
+  background: rgba(240, 192, 64, 0.35);
+  color: #f0c040;
+}
+
+.map-view-zoom-controls button.map-view-add-satellite-toggle--on:hover {
+  background: rgba(240, 192, 64, 0.45);
+}
+
+.map-view-add-satellite-icon {
+  display: inline-block;
+}
+
 .map-view-zoom-controls button.map-view-zoom-reset {
   font-size: 0.95rem;
   display: flex;
@@ -282,6 +303,34 @@ h1 {
   color: #1a1a2e;
 }
 
+.satellite-coords__error {
+  margin-bottom: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #f8d7da;
+  border: 1px solid #f5c2c7;
+  border-radius: 6px;
+  color: #842029;
+}
+
+.satellite-coords__error-message {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+}
+
+.satellite-coords__error-dismiss {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.5rem;
+  background: #fff;
+  border: 1px solid #f5c2c7;
+  border-radius: 4px;
+  color: #842029;
+  cursor: pointer;
+}
+
+.satellite-coords__error-dismiss:hover {
+  background: #f5c2c7;
+}
+
 .satellite-coords__empty {
   margin: 0;
   padding: 0.75rem 1rem;
@@ -309,15 +358,43 @@ h1 {
   font-size: 0.8125rem;
 }
 
+.satellite-coords__card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
 .satellite-coords__id {
   font-weight: 700;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #495057;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.375rem;
-  border-bottom: 1px solid #dee2e6;
+  flex: 1;
+  min-width: 0;
+}
+
+.satellite-coords__delete {
+  flex-shrink: 0;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #6c757d;
+  background: transparent;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.satellite-coords__delete:hover {
+  color: #dc3545;
+  border-color: #dc3545;
+  background: rgba(220, 53, 69, 0.08);
 }
 
 .satellite-coords__grid {

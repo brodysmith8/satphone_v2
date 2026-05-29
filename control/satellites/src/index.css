@@ -240,6 +240,107 @@ h1 {
   margin: 0 0 0.5rem;
 }
 
+/* Header row: "Satellites" heading with the simulation settings gear to its right */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Simulation metadata menu — gear toggle + popup */
+.sim-metadata-menu {
+  position: relative;
+  display: inline-flex;
+  /* Nudge up to baseline-align the gear with the h1's bottom margin */
+  margin-bottom: 0.5rem;
+}
+
+.sim-metadata-menu__gear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: #6c757d;
+  background: transparent;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.sim-metadata-menu__gear:hover {
+  color: #1a1a2e;
+  border-color: #adb5bd;
+  background: #f1f3f5;
+}
+
+.sim-metadata-menu__popup {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 10;
+  min-width: 16rem;
+  padding: 0.875rem 1rem;
+  background: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.sim-metadata-menu__granularity {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.sim-metadata-menu__granularity-button {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #495057;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.sim-metadata-menu__granularity-button:hover {
+  border-color: #adb5bd;
+}
+
+.sim-metadata-menu__granularity-button--active {
+  color: #fff;
+  background: #1a1a2e;
+  border-color: #1a1a2e;
+}
+
+.sim-metadata-menu__slider {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+
+.sim-metadata-menu__value {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+  color: #212529;
+  text-align: center;
+}
+
+.sim-metadata-menu__error {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  color: #842029;
+}
+
 .status-form {
   margin: 1.5rem 0;
 }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Globe } from './Globe'
 import { MapView } from './MapView'
 import { SatelliteCoordinatesBox } from './SatelliteCoordinatesBox'
+import { SimulationMetadataMenu } from './SimulationMetadataMenu'
 import { type SatellitePositionData } from './satellitePosition'
 
 const STATUS_URL = 'http://localhost:8848/status/all'
@@ -29,7 +30,10 @@ function App() {
 
   return (
     <div className="app">
-      <h1>Satellites</h1>
+      <header className="app-header">
+        <h1>Satellites</h1>
+        <SimulationMetadataMenu />
+      </header>
 
       <Globe satellitePositionData={satellitePositionData} />
 

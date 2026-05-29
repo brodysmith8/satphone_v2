@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Simulatable.hpp"
+#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <mutex>
@@ -50,6 +51,16 @@ public:
     /** Number of simulatable objects currently registered. */
     size_t size() const;
 
+    /** Wall-clock delay (in microseconds) inserted between simulation cycles. */
+    int getDelay() const;
+
+    /**
+     * Set the wall-clock delay (in microseconds) inserted between simulation cycles.
+     * @param delay Delay in microseconds. Defaults to 0 (run as fast as possible).
+     * @throws std::invalid_argument if delay is negative.
+     */
+    void setDelay(int delay);
+
 private:
     /**
      * Advance the simulation by one time step: step all registered objects by dt.
@@ -58,5 +69,6 @@ private:
     void step(double dt);
     std::vector<Simulatable*> objects_;
     double dt_;
+    std::atomic<int> delay_{0};
     mutable std::mutex mutex_;
 };

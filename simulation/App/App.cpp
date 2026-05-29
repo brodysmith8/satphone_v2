@@ -33,7 +33,8 @@ void App::run() {
             }
             const std::string& path = req->path();
             bool isApi = (path.size() >= 10 && path.compare(0, 10, "/satellite") == 0) ||
-                         (path.size() >= 7 && path.compare(0, 7, "/status") == 0);
+                         (path.size() >= 7 && path.compare(0, 7, "/status") == 0) ||
+                         (path.size() >= 6 && path.compare(0, 6, "/delay") == 0);
             if (isApi) {
                 fcb(corsPreflightResponse());
                 return;
@@ -59,6 +60,13 @@ void App::run() {
         {Options});
     app().registerHandler(
         "/status/all",
+        [](const HttpRequestPtr&,
+           std::function<void(const HttpResponsePtr&)>&& callback) {
+            callback(corsPreflightResponse());
+        },
+        {Options});
+    app().registerHandler(
+        "/delay",
         [](const HttpRequestPtr&,
            std::function<void(const HttpResponsePtr&)>&& callback) {
             callback(corsPreflightResponse());
@@ -204,7 +212,86 @@ void App::run() {
         },
         {Get});
 
-    // Keep this at the bottom 
+    // GET /delay — current wall-clock delay (µs) inserted between simulation cycles.
+    app().registerHandler(
+        "/delay",
+        [this](const HttpRequestPtr&,
+               std::function<void(const HttpResponsePtr&)>&& callback) {
+            if (!simulation_) {
+                Json::Value err;
+                err["error"] = "Simulation not available.";
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k503ServiceUnavailable);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            Json::Value body;
+            body["delay"] = simulation_->getDelay();
+            auto resp = HttpResponse::newHttpJsonResponse(body);
+            resp->addHeader("Access-Control-Allow-Origin", "*");
+            callback(resp);
+        },
+        {Get});
+
+    // POST /delay — set the wall-clock delay (µs) inserted between simulation cycles.
+    // Requires JSON body with a non-negative integer "delay".
+    app().registerHandler(
+        "/delay",
+        [this](const HttpRequestPtr& req,
+               std::function<void(const HttpResponsePtr&)>&& callback) {
+            if (!simulation_) {
+                Json::Value err;
+                err["error"] = "Simulation not available.";
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k503ServiceUnavailable);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            auto jsonPtr = req->getJsonObject();
+            if (!jsonPtr || !jsonPtr->isObject() || !jsonPtr->isMember("delay")) {
+                Json::Value err;
+                err["error"] = "Request body must be JSON with a non-negative integer \"delay\" (Content-Type: application/json).";
+                if (!req->getJsonError().empty()) {
+                    err["error"] = "Invalid JSON: " + req->getJsonError();
+                }
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            const Json::Value& jdelay = (*jsonPtr)["delay"];
+            if (!jdelay.isIntegral()) {
+                Json::Value err;
+                err["error"] = "\"delay\" must be an integer number of microseconds.";
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            try {
+                simulation_->setDelay(jdelay.asInt());
+            } catch (const std::invalid_argument& e) {
+                Json::Value err;
+                err["error"] = e.what();
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            Json::Value body;
+            body["delay"] = simulation_->getDelay();
+            auto resp = HttpResponse::newHttpJsonResponse(body);
+            resp->addHeader("Access-Control-Allow-Origin", "*");
+            callback(resp);
+        },
+        {Post});
+
+    // Keep this at the bottom
     app().registerHandler(
         "/{id}",
         [this](const HttpRequestPtr&,

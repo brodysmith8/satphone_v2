@@ -1,5 +1,7 @@
 #include "Simulation.hpp"
 #include <algorithm>
+#include <chrono>
+#include <stdexcept>
 #include <thread>
 
 void Simulation::add(Simulatable* obj) {
@@ -39,6 +41,7 @@ void Simulation::run() {
         for (Simulatable* obj : to_step) {
             obj->step(dt_);
         }
+        std::this_thread::sleep_for(std::chrono::microseconds(delay_.load()));
         std::this_thread::yield();
     }
 }
@@ -46,12 +49,26 @@ void Simulation::run() {
 void Simulation::run_for_duration(double duration) {
     const int steps = static_cast<int>(duration / dt_);
     for (int i = 0; i < steps; ++i) {
-        std::lock_guard lock(mutex_);
-        step(dt_);
+        {
+            std::lock_guard lock(mutex_);
+            step(dt_);
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(delay_.load()));
     }
 }
 
 size_t Simulation::size() const {
     std::lock_guard lock(mutex_);
     return objects_.size();
+}
+
+int Simulation::getDelay() const {
+    return delay_.load();
+}
+
+void Simulation::setDelay(int delay) {
+    if (delay < 0) {
+        throw std::invalid_argument("Simulation delay must be non-negative");
+    }
+    delay_.store(delay);
 }

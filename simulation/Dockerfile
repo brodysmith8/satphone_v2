@@ -14,4 +14,8 @@ COPY --from=builder /build/build/sim /app/sim
 
 EXPOSE 8848
 ENV PORT=8848
+
+# Log verbosity: TRACE, DEBUG, INFO, WARN, or ERROR. Set to DEBUG to see orbit updates.
+ENV SIM_LOG_LEVEL=INFO
+
 ENTRYPOINT ["/app/sim"]

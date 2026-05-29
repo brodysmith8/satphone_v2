@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 
 const API_BASE = 'http://localhost:8848'
 
-type Granularity = 'tight' | 'fine' | 'coarse'
+type Granularity = 'tight' | 'fine' | 'coarse' | 'extreme'
 
 type GranularitySetting = {
   label: string
@@ -16,6 +16,7 @@ const GRANULARITIES: Record<Granularity, GranularitySetting> = {
   tight: { label: 'Tight', min: 0, max: 625, step: 6.25 }, //   max 0.625 ms, step 0.00625 ms
   fine: { label: 'Fine', min: 0, max: 1250, step: 12.5 }, //   max 1.25 ms,  step 0.0125 ms
   coarse: { label: 'Coarse', min: 0, max: 5000, step: 125 }, // max 5 ms,     step 0.125 ms
+  extreme: { label: 'Extreme', min: 0, max: 5_000_000, step: 125_000 }, // max 5 s, step 125 ms
 }
 
 const DEFAULT_GRANULARITY: Granularity = 'fine'
@@ -25,6 +26,18 @@ const POST_DEBOUNCE_MS = 150
 function clampDelay(value: number, min: number, max: number): number {
   const clamped = Math.min(Math.max(value, min), max)
   return Math.max(0, Math.round(clamped))
+}
+
+/** Trim trailing zeros from a fixed-decimal string (e.g. "1.250" -> "1.25", "5.000" -> "5"). */
+function trimDecimals(value: string): string {
+  return value.replace(/\.?0+$/, '')
+}
+
+/** Format a delay in microseconds into the most readable unit (µs / ms / s). */
+function formatDelay(us: number): string {
+  if (us >= 1_000_000) return `${trimDecimals((us / 1_000_000).toFixed(3))} s`
+  if (us >= 1_000) return `${trimDecimals((us / 1_000).toFixed(3))} ms`
+  return `${us} µs`
 }
 
 export function SimulationMetadataMenu() {
@@ -150,7 +163,7 @@ export function SimulationMetadataMenu() {
             aria-label="Simulation delay (µs)"
           />
 
-          <div className="sim-metadata-menu__value">{delay} µs</div>
+          <div className="sim-metadata-menu__value">{formatDelay(delay)}</div>
 
           {error && (
             <p className="sim-metadata-menu__error" role="alert" aria-live="polite">

@@ -1,4 +1,6 @@
 #include "Satellite.hpp"
+#include <trantor/utils/Logger.h>
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -51,13 +53,21 @@ Satellite::Satellite(double latitude_rad, double longitude_rad, double height_m)
     if (!err.empty()) {
         throw std::invalid_argument(err);
     }
-    const double incl = inclination_rad_;
-    const double sin_incl = std::sin(incl), cos_incl = std::cos(incl);
+    // A circular orbit of inclination i only reaches subsatellite latitudes within ±i.
+    // If the requested point lies higher than the default inclination, raise the inclination
+    // so the orbit plane actually passes through it (the point becomes the orbit's apex).
+    // Otherwise sin(lat)/sin(incl) > 1 and std::asin returns NaN, poisoning all later state.
+    if (std::abs(latitude_rad) > inclination_rad_) {
+        inclination_rad_ = std::abs(latitude_rad);
+    }
+    const double sin_incl = std::sin(inclination_rad_), cos_incl = std::cos(inclination_rad_);
     if (std::abs(sin_incl) < 1e-10) {
         mean_anomaly_rad_ = 0;
         raan_rad_ = longitude_rad;
     } else {
-        mean_anomaly_rad_ = std::asin(std::sin(latitude_rad) / sin_incl);
+        // Clamp guards against the ratio marginally exceeding 1 at the boundary (FP rounding).
+        const double sin_arg = std::clamp(std::sin(latitude_rad) / sin_incl, -1.0, 1.0);
+        mean_anomaly_rad_ = std::asin(sin_arg);
         raan_rad_ = longitude_rad - std::atan2(std::sin(mean_anomaly_rad_) * cos_incl,
                                                std::cos(mean_anomaly_rad_));
     }
@@ -98,6 +108,16 @@ void Satellite::updateLatLonFromOrbit() {
     } else {
         longitude_ = std::atan2(y_ecef, x_ecef);
     }
+
+    constexpr double RAD_TO_DEG = 180.0 / PI;
+    LOG_DEBUG << "updateLatLonFromOrbit:"
+              << " sim_time_s=" << sim_time_s_
+              << " mean_anomaly_deg=" << mean_anomaly_rad_ * RAD_TO_DEG
+              << " raan_deg=" << raan_rad_ * RAD_TO_DEG
+              << " inclination_deg=" << inclination_rad_ * RAD_TO_DEG
+              << " height_m=" << height_
+              << " -> lat_deg=" << latitude_ * RAD_TO_DEG
+              << " lon_deg=" << longitude_ * RAD_TO_DEG;
 }
 
 Json::Value Satellite::value() const {

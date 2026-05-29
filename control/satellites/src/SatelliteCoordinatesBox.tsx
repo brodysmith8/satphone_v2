@@ -2,8 +2,7 @@ import {
   type SatellitePositionData,
   positionToDegrees,
 } from './satellitePosition'
-
-const API_BASE = 'http://localhost:8848'
+import { API_BASE } from './config'
 
 export type SatelliteCoordinatesBoxProps = {
   /** Satellite position data (JSON from API): lat/lon in radians, height in meters. */

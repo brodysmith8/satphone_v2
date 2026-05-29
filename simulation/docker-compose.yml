@@ -3,6 +3,8 @@ services:
     build: .
     image: satphone-sim:latest
     ports:
+      # External 8848 is served by nginx, which proxies to Drogon on internal 8849.
       - "8848:8848"
     environment:
-      - PORT=8848
+      - PORT=8849
+      - STREAM_HZ=30

@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-
-const API_BASE = 'http://localhost:8848'
+import { API_BASE } from './config'
 
 type Granularity = 'tight' | 'fine' | 'coarse' | 'extreme'
 
@@ -21,6 +20,19 @@ const GRANULARITIES: Record<Granularity, GranularitySetting> = {
 
 const DEFAULT_GRANULARITY: Granularity = 'fine'
 const POST_DEBOUNCE_MS = 150
+
+// Stream broadcast cadence (Hz) for the WebSocket data plane. Mirrors backend
+// validation in POST /stream/rate (1–144 Hz).
+const RATE_MIN = 1
+const RATE_MAX = 144
+const RATE_STEP = 1
+const DEFAULT_RATE = 30
+
+/** Clamp to range and coerce to an integer (backend requires 1–144 Hz). */
+function clampRate(value: number): number {
+  const clamped = Math.min(Math.max(value, RATE_MIN), RATE_MAX)
+  return Math.round(clamped)
+}
 
 /** Clamp to range and coerce to a non-negative integer (backend requires integral, non-negative). */
 function clampDelay(value: number, min: number, max: number): number {
@@ -45,13 +57,17 @@ export function SimulationMetadataMenu() {
   const [delay, setDelay] = useState(0)
   const [granularity, setGranularity] = useState<Granularity>(DEFAULT_GRANULARITY)
   const [error, setError] = useState<string | null>(null)
+  const [rate, setRate] = useState(DEFAULT_RATE)
+  const [rateError, setRateError] = useState<string | null>(null)
 
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const postTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ratePostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const range = GRANULARITIES[granularity]
 
-  // Fetch the current delay whenever the popup opens (it may have changed elsewhere).
+  // Fetch current delay + stream rate whenever the popup opens (they may have
+  // changed elsewhere).
   useEffect(() => {
     if (!open) return
     let cancelled = false
@@ -68,7 +84,21 @@ export function SimulationMetadataMenu() {
         if (!cancelled) setError('Could not load current delay.')
       }
     }
+    const fetchRate = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/stream/rate`)
+        if (!res.ok) throw new Error(`GET /stream/rate failed (${res.status})`)
+        const data = (await res.json()) as { rate: number }
+        if (!cancelled) {
+          setRate(clampRate(data.rate))
+          setRateError(null)
+        }
+      } catch {
+        if (!cancelled) setRateError('Could not load current rate.')
+      }
+    }
     fetchDelay()
+    fetchRate()
     return () => {
       cancelled = true
     }
@@ -86,10 +116,11 @@ export function SimulationMetadataMenu() {
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [open])
 
-  // Clear any pending debounced POST on unmount.
+  // Clear any pending debounced POSTs on unmount.
   useEffect(() => {
     return () => {
       if (postTimerRef.current) clearTimeout(postTimerRef.current)
+      if (ratePostTimerRef.current) clearTimeout(ratePostTimerRef.current)
     }
   }, [])
 
@@ -110,10 +141,33 @@ export function SimulationMetadataMenu() {
     }, POST_DEBOUNCE_MS)
   }, [])
 
+  const postRate = useCallback((value: number) => {
+    if (ratePostTimerRef.current) clearTimeout(ratePostTimerRef.current)
+    ratePostTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/stream/rate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rate: value }),
+        })
+        if (!res.ok) throw new Error(`POST /stream/rate failed (${res.status})`)
+        setRateError(null)
+      } catch {
+        setRateError('Could not update rate.')
+      }
+    }, POST_DEBOUNCE_MS)
+  }, [])
+
   const handleSliderChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = clampDelay(Number(event.target.value), range.min, range.max)
     setDelay(value)
     postDelay(value)
+  }
+
+  const handleRateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = clampRate(Number(event.target.value))
+    setRate(value)
+    postRate(value)
   }
 
   // Switching granularity only changes the slider scale — it does not POST.
@@ -135,41 +189,68 @@ export function SimulationMetadataMenu() {
 
       {open && (
         <div className="sim-metadata-menu__popup" role="dialog" aria-label="Simulation settings">
-          <div className="sim-metadata-menu__granularity" role="group" aria-label="Slider granularity">
-            {(Object.keys(GRANULARITIES) as Granularity[]).map((key) => (
-              <button
-                key={key}
-                type="button"
-                className={
-                  'sim-metadata-menu__granularity-button' +
-                  (key === granularity ? ' sim-metadata-menu__granularity-button--active' : '')
-                }
-                aria-pressed={key === granularity}
-                onClick={() => setGranularity(key)}
-              >
-                {GRANULARITIES[key].label}
-              </button>
-            ))}
-          </div>
+          <section className="sim-metadata-menu__section" aria-label="Simulation Metadata">
+            <h2 className="sim-metadata-menu__section-title">Simulation Metadata</h2>
 
-          <input
-            type="range"
-            className="sim-metadata-menu__slider"
-            min={range.min}
-            max={range.max}
-            step={range.step}
-            value={thumbValue}
-            onChange={handleSliderChange}
-            aria-label="Simulation delay (µs)"
-          />
+            <div className="sim-metadata-menu__granularity" role="group" aria-label="Slider granularity">
+              {(Object.keys(GRANULARITIES) as Granularity[]).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={
+                    'sim-metadata-menu__granularity-button' +
+                    (key === granularity ? ' sim-metadata-menu__granularity-button--active' : '')
+                  }
+                  aria-pressed={key === granularity}
+                  onClick={() => setGranularity(key)}
+                >
+                  {GRANULARITIES[key].label}
+                </button>
+              ))}
+            </div>
 
-          <div className="sim-metadata-menu__value">{formatDelay(delay)}</div>
+            <input
+              type="range"
+              className="sim-metadata-menu__slider"
+              min={range.min}
+              max={range.max}
+              step={range.step}
+              value={thumbValue}
+              onChange={handleSliderChange}
+              aria-label="Simulation delay (µs)"
+            />
 
-          {error && (
-            <p className="sim-metadata-menu__error" role="alert" aria-live="polite">
-              {error}
-            </p>
-          )}
+            <div className="sim-metadata-menu__value">{formatDelay(delay)}</div>
+
+            {error && (
+              <p className="sim-metadata-menu__error" role="alert" aria-live="polite">
+                {error}
+              </p>
+            )}
+          </section>
+
+          <section className="sim-metadata-menu__section" aria-label="Application Metadata">
+            <h2 className="sim-metadata-menu__section-title">Application Metadata</h2>
+
+            <input
+              type="range"
+              className="sim-metadata-menu__slider"
+              min={RATE_MIN}
+              max={RATE_MAX}
+              step={RATE_STEP}
+              value={rate}
+              onChange={handleRateChange}
+              aria-label="Stream rate (Hz)"
+            />
+
+            <div className="sim-metadata-menu__value">{rate} Hz</div>
+
+            {rateError && (
+              <p className="sim-metadata-menu__error" role="alert" aria-live="polite">
+                {rateError}
+              </p>
+            )}
+          </section>
         </div>
       )}
     </div>

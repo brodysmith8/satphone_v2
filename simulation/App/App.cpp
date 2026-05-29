@@ -1,10 +1,20 @@
 #include "App.hpp"
+#include "StreamHub.hpp"
 #include <drogon/drogon.h>
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
 
 using namespace drogon;
+
+namespace {
+    /** Serialize a JSON value to a compact (unindented) string for broadcasting. */
+    std::string toCompactString(const Json::Value& v) {
+        Json::StreamWriterBuilder builder;
+        builder["indentation"] = "";
+        return Json::writeString(builder, v);
+    }
+} // namespace
 
 App::App() {}
 
@@ -34,7 +44,8 @@ void App::run() {
             const std::string& path = req->path();
             bool isApi = (path.size() >= 10 && path.compare(0, 10, "/satellite") == 0) ||
                          (path.size() >= 7 && path.compare(0, 7, "/status") == 0) ||
-                         (path.size() >= 6 && path.compare(0, 6, "/delay") == 0);
+                         (path.size() >= 6 && path.compare(0, 6, "/delay") == 0) ||
+                         (path.size() >= 7 && path.compare(0, 7, "/stream") == 0);
             if (isApi) {
                 fcb(corsPreflightResponse());
                 return;
@@ -67,6 +78,13 @@ void App::run() {
         {Options});
     app().registerHandler(
         "/delay",
+        [](const HttpRequestPtr&,
+           std::function<void(const HttpResponsePtr&)>&& callback) {
+            callback(corsPreflightResponse());
+        },
+        {Options});
+    app().registerHandler(
+        "/stream/rate",
         [](const HttpRequestPtr&,
            std::function<void(const HttpResponsePtr&)>&& callback) {
             callback(corsPreflightResponse());
@@ -140,7 +158,11 @@ void App::run() {
                 return;
             }
             Satellite* raw = sat.get();
-            std::string id = "sat_" + std::to_string(next_satellite_id_++);
+            std::string id;
+            {
+                std::lock_guard<std::mutex> mapLock(objects_mutex_);
+                id = "sat_" + std::to_string(next_satellite_id_++);
+            }
             try {
                 simulation_->add(raw);
             } catch (...) {
@@ -152,8 +174,11 @@ void App::run() {
                 callback(resp);
                 return;
             }
-            dynamic_satellites_[id] = std::move(sat);
-            objects_[id] = raw;
+            {
+                std::lock_guard<std::mutex> mapLock(objects_mutex_);
+                dynamic_satellites_[id] = std::move(sat);
+                objects_[id] = raw;
+            }
             Json::Value body;
             body["id"] = id;
             auto resp = HttpResponse::newHttpJsonResponse(body);
@@ -169,6 +194,7 @@ void App::run() {
         [this](const HttpRequestPtr&,
                std::function<void(const HttpResponsePtr&)>&& callback,
                const std::string& id) {
+            std::lock_guard<std::mutex> mapLock(objects_mutex_);
             auto it = dynamic_satellites_.find(id);
             if (it == dynamic_satellites_.end()) {
                 auto resp = HttpResponse::newHttpResponse();
@@ -194,19 +220,7 @@ void App::run() {
         "/status/all",
         [this](const HttpRequestPtr&,
                std::function<void(const HttpResponsePtr&)>&& callback) {
-            Json::Value body;
-            if (simulation_) {
-                simulation_->withLock([this, &body]() {
-                    for (const auto& [id, obj] : objects_) {
-                        body[id] = obj->value();
-                    }
-                });
-            } else {
-                for (const auto& [id, obj] : objects_) {
-                    body[id] = obj->value();
-                }
-            }
-            auto resp = HttpResponse::newHttpJsonResponse(body);
+            auto resp = HttpResponse::newHttpJsonResponse(buildSnapshot());
             resp->addHeader("Access-Control-Allow-Origin", "*");
             callback(resp);
         },
@@ -291,6 +305,69 @@ void App::run() {
         },
         {Post});
 
+    // GET /stream/rate — current WebSocket broadcast cadence in Hz.
+    app().registerHandler(
+        "/stream/rate",
+        [this](const HttpRequestPtr&,
+               std::function<void(const HttpResponsePtr&)>&& callback) {
+            Json::Value body;
+            body["rate"] = stream_hz_.load();
+            auto resp = HttpResponse::newHttpJsonResponse(body);
+            resp->addHeader("Access-Control-Allow-Origin", "*");
+            callback(resp);
+        },
+        {Get});
+
+    // POST /stream/rate — set the WebSocket broadcast cadence.
+    // Requires JSON body with a numeric "rate" in [1, 60] Hz; re-arms the broadcast timer.
+    app().registerHandler(
+        "/stream/rate",
+        [this](const HttpRequestPtr& req,
+               std::function<void(const HttpResponsePtr&)>&& callback) {
+            auto jsonPtr = req->getJsonObject();
+            if (!jsonPtr || !jsonPtr->isObject() || !jsonPtr->isMember("rate")) {
+                Json::Value err;
+                err["error"] = "Request body must be JSON with a numeric \"rate\" in Hz (Content-Type: application/json).";
+                if (!req->getJsonError().empty()) {
+                    err["error"] = "Invalid JSON: " + req->getJsonError();
+                }
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            const Json::Value& jrate = (*jsonPtr)["rate"];
+            if (!jrate.isNumeric()) {
+                Json::Value err;
+                err["error"] = "\"rate\" must be a number (Hz).";
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            double rate = jrate.asDouble();
+            if (rate < 1.0 || rate > 144.0) {
+                Json::Value err;
+                err["error"] = "\"rate\" must be between 1 and 144 Hz.";
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            stream_hz_.store(rate);
+            // Re-arm the broadcast timer on the event-loop thread.
+            app().getLoop()->queueInLoop([this]() { armBroadcastTimer(); });
+            Json::Value body;
+            body["rate"] = stream_hz_.load();
+            auto resp = HttpResponse::newHttpJsonResponse(body);
+            resp->addHeader("Access-Control-Allow-Origin", "*");
+            callback(resp);
+        },
+        {Post});
+
     // Keep this at the bottom
     app().registerHandler(
         "/{id}",
@@ -305,6 +382,21 @@ void App::run() {
         },
         {Get});
 
+    // Initial broadcast cadence from STREAM_HZ (default 30, clamped to [1, 144]).
+    if (const char* hz_env = std::getenv("STREAM_HZ")) {
+        try {
+            double hz = std::stod(hz_env);
+            if (hz >= 1.0 && hz <= 144.0) {
+                stream_hz_.store(hz);
+            }
+        } catch (...) {
+            // Ignore malformed STREAM_HZ; keep the default.
+        }
+    }
+
+    // Arm the periodic position broadcast once the event loop is running.
+    app().getLoop()->queueInLoop([this]() { armBroadcastTimer(); });
+
     const char* port_env = std::getenv("PORT");
     uint16_t port = port_env ? static_cast<uint16_t>(std::stoul(port_env)) : 8848;
     app().addListener("0.0.0.0", port).run();
@@ -312,4 +404,33 @@ void App::run() {
 
 void App::add_objects(std::unordered_map<std::string, Simulatable*> objects) {
     objects_ = std::move(objects);
+}
+
+Json::Value App::buildSnapshot() {
+    Json::Value body;
+    std::lock_guard<std::mutex> mapLock(objects_mutex_);
+    if (simulation_) {
+        simulation_->withLock([this, &body]() {
+            for (const auto& [id, obj] : objects_) {
+                body[id] = obj->value();
+            }
+        });
+    } else {
+        for (const auto& [id, obj] : objects_) {
+            body[id] = obj->value();
+        }
+    }
+    return body;
+}
+
+void App::armBroadcastTimer() {
+    // Must run on the event-loop thread (timer APIs are not thread-safe).
+    if (broadcast_timer_id_ != 0) {
+        app().getLoop()->invalidateTimer(broadcast_timer_id_);
+        broadcast_timer_id_ = 0;
+    }
+    double interval = 1.0 / stream_hz_.load();
+    broadcast_timer_id_ = app().getLoop()->runEvery(interval, [this]() {
+        StreamHub::instance().broadcast(toCompactString(buildSnapshot()));
+    });
 }

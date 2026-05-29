@@ -15,8 +15,8 @@ import {
   type SatellitePositionData,
   positionToDegrees,
 } from './satellitePosition'
+import { API_BASE } from './config'
 
-const API_BASE = 'http://localhost:8848'
 const DEFAULT_NEW_SATELLITE_HEIGHT_M = 400_000
 
 const MAP_WIDTH = 800

@@ -61,6 +61,16 @@ public:
      */
     void setDelay(int delay);
 
+    /** Simulation time step (seconds) advanced per cycle. */
+    double getDt() const;
+
+    /**
+     * Set the simulation time step (seconds) advanced per cycle.
+     * @param dt Time step in seconds. Must be positive.
+     * @throws std::invalid_argument if dt is not positive.
+     */
+    void setDt(double dt);
+
 private:
     /**
      * Advance the simulation by one time step: step all registered objects by dt.
@@ -68,7 +78,7 @@ private:
      */
     void step(double dt);
     std::vector<Simulatable*> objects_;
-    double dt_;
+    std::atomic<double> dt_;
     std::atomic<int> delay_{0};
     mutable std::mutex mutex_;
 };

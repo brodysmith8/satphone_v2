@@ -306,6 +306,21 @@ h1 {
   color: #868e96;
 }
 
+.sim-metadata-menu__subsection + .sim-metadata-menu__subsection {
+  margin-top: 0.875rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f1f3f5;
+}
+
+.sim-metadata-menu__subsection-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #adb5bd;
+}
+
 .sim-metadata-menu__granularity {
   display: flex;
   gap: 0.25rem;

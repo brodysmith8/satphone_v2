@@ -45,6 +45,7 @@ void App::run() {
             bool isApi = (path.size() >= 10 && path.compare(0, 10, "/satellite") == 0) ||
                          (path.size() >= 7 && path.compare(0, 7, "/status") == 0) ||
                          (path.size() >= 6 && path.compare(0, 6, "/delay") == 0) ||
+                         (path.size() >= 3 && path.compare(0, 3, "/dt") == 0) ||
                          (path.size() >= 7 && path.compare(0, 7, "/stream") == 0);
             if (isApi) {
                 fcb(corsPreflightResponse());
@@ -78,6 +79,13 @@ void App::run() {
         {Options});
     app().registerHandler(
         "/delay",
+        [](const HttpRequestPtr&,
+           std::function<void(const HttpResponsePtr&)>&& callback) {
+            callback(corsPreflightResponse());
+        },
+        {Options});
+    app().registerHandler(
+        "/dt",
         [](const HttpRequestPtr&,
            std::function<void(const HttpResponsePtr&)>&& callback) {
             callback(corsPreflightResponse());
@@ -299,6 +307,85 @@ void App::run() {
             }
             Json::Value body;
             body["delay"] = simulation_->getDelay();
+            auto resp = HttpResponse::newHttpJsonResponse(body);
+            resp->addHeader("Access-Control-Allow-Origin", "*");
+            callback(resp);
+        },
+        {Post});
+
+    // GET /dt — current simulation time step (seconds) advanced per cycle.
+    app().registerHandler(
+        "/dt",
+        [this](const HttpRequestPtr&,
+               std::function<void(const HttpResponsePtr&)>&& callback) {
+            if (!simulation_) {
+                Json::Value err;
+                err["error"] = "Simulation not available.";
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k503ServiceUnavailable);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            Json::Value body;
+            body["dt"] = simulation_->getDt();
+            auto resp = HttpResponse::newHttpJsonResponse(body);
+            resp->addHeader("Access-Control-Allow-Origin", "*");
+            callback(resp);
+        },
+        {Get});
+
+    // POST /dt — set the simulation time step (seconds) advanced per cycle.
+    // Requires JSON body with a positive numeric "dt".
+    app().registerHandler(
+        "/dt",
+        [this](const HttpRequestPtr& req,
+               std::function<void(const HttpResponsePtr&)>&& callback) {
+            if (!simulation_) {
+                Json::Value err;
+                err["error"] = "Simulation not available.";
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k503ServiceUnavailable);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            auto jsonPtr = req->getJsonObject();
+            if (!jsonPtr || !jsonPtr->isObject() || !jsonPtr->isMember("dt")) {
+                Json::Value err;
+                err["error"] = "Request body must be JSON with a positive number \"dt\" (Content-Type: application/json).";
+                if (!req->getJsonError().empty()) {
+                    err["error"] = "Invalid JSON: " + req->getJsonError();
+                }
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            const Json::Value& jdt = (*jsonPtr)["dt"];
+            if (!jdt.isNumeric()) {
+                Json::Value err;
+                err["error"] = "\"dt\" must be a number of seconds.";
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            try {
+                simulation_->setDt(jdt.asDouble());
+            } catch (const std::invalid_argument& e) {
+                Json::Value err;
+                err["error"] = e.what();
+                auto resp = HttpResponse::newHttpJsonResponse(err);
+                resp->setStatusCode(k400BadRequest);
+                resp->addHeader("Access-Control-Allow-Origin", "*");
+                callback(resp);
+                return;
+            }
+            Json::Value body;
+            body["dt"] = simulation_->getDt();
             auto resp = HttpResponse::newHttpJsonResponse(body);
             resp->addHeader("Access-Control-Allow-Origin", "*");
             callback(resp);

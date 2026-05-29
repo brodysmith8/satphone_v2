@@ -22,8 +22,8 @@ RUN chmod +x /app/docker-entrypoint.sh
 EXPOSE 8848
 ENV PORT=8849
 
-# WebSocket position broadcast cadence in Hz (clamped to [1, 60]).
-ENV STREAM_HZ=30
+# WebSocket position broadcast cadence in Hz (clamped to [1, 144]).
+ENV STREAM_HZ=144
 
 # Log verbosity: TRACE, DEBUG, INFO, WARN, or ERROR. Set to DEBUG to see orbit updates.
 ENV SIM_LOG_LEVEL=INFO

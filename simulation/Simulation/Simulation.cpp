@@ -8,7 +8,7 @@ void Simulation::add(Simulatable* obj) {
     if (obj) {
         std::lock_guard lock(mutex_);
         objects_.push_back(obj);
-        obj->step(dt_);
+        obj->step(dt_.load());
     }
 }
 
@@ -39,7 +39,7 @@ void Simulation::run() {
             to_step = objects_;
         }
         for (Simulatable* obj : to_step) {
-            obj->step(dt_);
+            obj->step(dt_.load());
         }
         std::this_thread::sleep_for(std::chrono::microseconds(delay_.load()));
         std::this_thread::yield();
@@ -47,11 +47,11 @@ void Simulation::run() {
 }
 
 void Simulation::run_for_duration(double duration) {
-    const int steps = static_cast<int>(duration / dt_);
+    const int steps = static_cast<int>(duration / dt_.load());
     for (int i = 0; i < steps; ++i) {
         {
             std::lock_guard lock(mutex_);
-            step(dt_);
+            step(dt_.load());
         }
         std::this_thread::sleep_for(std::chrono::microseconds(delay_.load()));
     }
@@ -71,4 +71,15 @@ void Simulation::setDelay(int delay) {
         throw std::invalid_argument("Simulation delay must be non-negative");
     }
     delay_.store(delay);
+}
+
+double Simulation::getDt() const {
+    return dt_.load();
+}
+
+void Simulation::setDt(double dt) {
+    if (dt <= 0.0) {
+        throw std::invalid_argument("Simulation dt must be positive");
+    }
+    dt_.store(dt);
 }

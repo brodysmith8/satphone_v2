@@ -4,8 +4,7 @@ import { MapView } from './MapView'
 import { SatelliteCoordinatesBox } from './SatelliteCoordinatesBox'
 import { SimulationMetadataMenu } from './SimulationMetadataMenu'
 import { type SatellitePositionData } from './satellitePosition'
-
-const STATUS_URL = 'http://localhost:8848/status/all'
+import { subscribeToSatelliteStream } from './satelliteStream'
 
 function App() {
   const [satellitePositionData, setSatellitePositionData] =
@@ -13,19 +12,8 @@ function App() {
   const [addSatelliteError, setAddSatelliteError] = useState<string | null>(null)
 
   useEffect(() => {
-    const poll = async () => {
-      try {
-        const res = await fetch(STATUS_URL)
-        const text = await res.text()
-        const data = JSON.parse(text) as SatellitePositionData
-        setSatellitePositionData(data)
-      } catch {
-        // keep previous state on poll error
-      }
-    }
-    poll()
-    const id = setInterval(poll, 100) // 10 = 10ms poll interval
-    return () => clearInterval(id)
+    const stream = subscribeToSatelliteStream(setSatellitePositionData)
+    return () => stream.close()
   }, [])
 
   return (

@@ -10,12 +10,22 @@ RUN mkdir -p build && cd build && \
 FROM drogonframework/drogon:latest
 WORKDIR /app
 
-COPY --from=builder /build/build/sim /app/sim
+RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*
 
+COPY --from=builder /build/build/sim /app/sim
+COPY nginx.conf /etc/nginx/conf.d/satphone.conf
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
+# Drogon listens internally on 8849; nginx serves the external port 8848 and
+# proxies /api/ (REST) and /ws/ (WebSocket) to Drogon.
 EXPOSE 8848
-ENV PORT=8848
+ENV PORT=8849
+
+# WebSocket position broadcast cadence in Hz (clamped to [1, 60]).
+ENV STREAM_HZ=30
 
 # Log verbosity: TRACE, DEBUG, INFO, WARN, or ERROR. Set to DEBUG to see orbit updates.
 ENV SIM_LOG_LEVEL=INFO
 
-ENTRYPOINT ["/app/sim"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
